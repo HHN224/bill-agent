@@ -7,6 +7,8 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import Settings, get_settings
+from app.services.llm_client import LLMClient
+from app.services.transaction_parser import TransactionParser
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -30,3 +32,13 @@ def verify_api_token(
             detail="Invalid or missing API token.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def get_transaction_parser(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> TransactionParser:
+    """按照当前配置创建账单解析器。"""
+    return TransactionParser(
+        LLMClient(settings),
+        default_timezone=settings.default_timezone,
+    )
