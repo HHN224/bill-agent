@@ -1,4 +1,4 @@
-"""SQLAlchemy engine, session factory, and database initialization."""
+"""SQLAlchemy 引擎、会话工厂和数据库初始化。"""
 
 from collections.abc import Generator
 from pathlib import Path
@@ -10,11 +10,11 @@ from app.config import get_settings
 
 
 class Base(DeclarativeBase):
-    """Base class for all ORM models."""
+    """所有 ORM 模型的基类。"""
 
 
 def _sqlite_file_path(database_url: str) -> Path | None:
-    """Return the local path from a file-backed SQLite URL."""
+    """从文件型 SQLite 地址中提取本地路径。"""
     prefix = "sqlite:///"
     if not database_url.startswith(prefix):
         return None
@@ -26,7 +26,7 @@ def _sqlite_file_path(database_url: str) -> Path | None:
 
 
 def create_database_engine(database_url: str) -> Engine:
-    """Create a SQLAlchemy engine suitable for the configured database."""
+    """按照数据库配置创建 SQLAlchemy 引擎。"""
     database_path = _sqlite_file_path(database_url)
     if database_path is not None:
         database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -44,14 +44,14 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 
 def initialize_database(database_engine: Engine = engine) -> None:
-    """Create all currently defined database tables."""
+    """创建当前已经定义的全部数据表。"""
     from app import models  # noqa: F401
 
     Base.metadata.create_all(bind=database_engine)
 
 
 def get_db() -> Generator[Session, None, None]:
-    """Yield one database session and always close it after the request."""
+    """为单次请求提供数据库会话，并在结束后确保关闭。"""
     session = SessionLocal()
     try:
         yield session

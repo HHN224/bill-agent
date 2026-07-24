@@ -1,4 +1,4 @@
-"""Local development launcher."""
+"""本地开发启动入口。"""
 
 import uvicorn
 

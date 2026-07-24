@@ -1,1 +1,1 @@
-"""API routers will be added in later project phases."""
+"""API 路由将在后续阶段加入。"""

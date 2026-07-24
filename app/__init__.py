@@ -1,1 +1,1 @@
-"""Natural-language bookkeeping backend."""
+"""自然语言记账后端。"""

@@ -1,4 +1,4 @@
-"""Database models for bookkeeping records."""
+"""记账记录的数据库模型。"""
 
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -17,12 +17,12 @@ from app.database import Base
 
 
 def utc_now() -> datetime:
-    """Return the current timezone-aware UTC time."""
+    """返回带时区信息的当前 UTC 时间。"""
     return datetime.now(timezone.utc)
 
 
 class Transaction(Base):
-    """A single expense or income record."""
+    """单笔支出或收入记录。"""
 
     __tablename__ = "transactions"
     __table_args__ = (

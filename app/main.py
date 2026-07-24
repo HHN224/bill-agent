@@ -1,4 +1,4 @@
-"""FastAPI application entry point."""
+"""FastAPI 应用入口。"""
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -11,19 +11,19 @@ from app.schemas import HealthResponse
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """Initialize persistent resources when the application starts."""
+    """应用启动时初始化持久化资源。"""
     initialize_database()
     yield
 
 
 app = FastAPI(
     title="Natural Language Bookkeeping API",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])
 def health() -> HealthResponse:
-    """Report whether the API process is running."""
+    """返回 API 进程是否正常运行。"""
     return HealthResponse(status="ok")
