@@ -1,4 +1,4 @@
-"""Reusable FastAPI dependencies."""
+"""可复用的 FastAPI 依赖。"""
 
 import secrets
 from typing import Annotated
@@ -18,7 +18,7 @@ def verify_api_token(
     ],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> None:
-    """Require a Bearer token matching APP_API_TOKEN."""
+    """要求 Bearer Token 与 APP_API_TOKEN 一致。"""
     supplied_token = credentials.credentials if credentials else ""
     token_is_valid = bool(settings.app_api_token) and secrets.compare_digest(
         supplied_token,
