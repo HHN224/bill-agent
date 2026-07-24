@@ -7,6 +7,7 @@ from fastapi import FastAPI
 
 from app.database import initialize_database
 from app.errors import register_exception_handlers
+from app.routers.summaries import router as summaries_router
 from app.routers.transactions import router as transactions_router
 from app.schemas import HealthResponse
 
@@ -20,12 +21,13 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="Natural Language Bookkeeping API",
-    version="0.3.0",
+    version="0.4.0",
     lifespan=lifespan,
 )
 
 register_exception_handlers(app)
 app.include_router(transactions_router)
+app.include_router(summaries_router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])

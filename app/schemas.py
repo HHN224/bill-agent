@@ -1,6 +1,6 @@
 """API 对外返回的 Pydantic 数据结构。"""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -134,3 +134,69 @@ class ErrorResponse(BaseModel):
     error_code: str
     message: str
     details: Any = None
+
+
+class CategoryAmount(BaseModel):
+    """单个支出分类的汇总金额。"""
+
+    category: Category
+    amount: Decimal
+
+    @field_serializer("amount", when_used="json")
+    def serialize_amount(self, value: Decimal) -> float:
+        """把分类金额输出为 JSON 数字。"""
+        return float(value)
+
+
+class DailyAmount(BaseModel):
+    """单个日期的支出汇总金额。"""
+
+    date: date
+    amount: Decimal
+
+    @field_serializer("amount", when_used="json")
+    def serialize_amount(self, value: Decimal) -> float:
+        """把每日金额输出为 JSON 数字。"""
+        return float(value)
+
+
+class DailySummaryResponse(BaseModel):
+    """今日收支与支出分类汇总。"""
+
+    date: date
+    expense_total: Decimal
+    income_total: Decimal
+    transaction_count: int
+    categories: list[CategoryAmount]
+
+    @field_serializer(
+        "expense_total",
+        "income_total",
+        when_used="json",
+    )
+    def serialize_totals(self, value: Decimal) -> float:
+        """把今日汇总金额输出为 JSON 数字。"""
+        return float(value)
+
+
+class MonthlySummaryResponse(BaseModel):
+    """月度收支、分类与每日支出汇总。"""
+
+    year: int
+    month: int
+    expense_total: Decimal
+    income_total: Decimal
+    net_amount: Decimal
+    transaction_count: int
+    categories: list[CategoryAmount]
+    daily_totals: list[DailyAmount]
+
+    @field_serializer(
+        "expense_total",
+        "income_total",
+        "net_amount",
+        when_used="json",
+    )
+    def serialize_totals(self, value: Decimal) -> float:
+        """把月度汇总金额输出为 JSON 数字。"""
+        return float(value)
