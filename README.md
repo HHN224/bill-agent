@@ -357,4 +357,4 @@ python -m pytest -q tests/test_end_to_end.py
 
 不要执行 `docker compose down -v`，该命令会删除 Caddy 的证书与运行状态卷；不要删除 `${DATA_HOST_DIR}`，其中保存 SQLite 主库。
 
-- 偷在这里放置一个传送标记
+- 偷偷在这里放置一个传送标记
