@@ -13,6 +13,7 @@ from app.config import Settings, get_settings
 from app.database import get_db
 from app.dependencies import get_transaction_parser, verify_api_token
 from app.errors import APIError
+from app.logging_config import get_application_logger
 from app.models import Transaction
 from app.schemas import (
     DeleteTransactionResponse,
@@ -36,6 +37,9 @@ from app.services.transaction_parser import (
 )
 
 
+logger = get_application_logger(__name__)
+
+
 router = APIRouter(
     prefix="/api/transactions",
     tags=["transactions"],
@@ -50,6 +54,10 @@ def _transaction_response(transaction: Transaction) -> TransactionResponse:
 
 def _database_error(session: Session, exc: SQLAlchemyError) -> APIError:
     """回滚事务并生成数据库错误。"""
+    logger.error(
+        "Transaction database operation failed error_type=%s",
+        type(exc).__name__,
+    )
     session.rollback()
     return APIError(
         status_code=500,

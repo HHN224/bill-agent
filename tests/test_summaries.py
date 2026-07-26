@@ -1,10 +1,12 @@
 from collections.abc import Generator
 from datetime import datetime, timedelta
 from decimal import Decimal
+from unittest.mock import Mock
 from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 import pytest
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings, get_settings
@@ -275,6 +277,39 @@ def test_invalid_month_returns_unified_validation_error(
 
     assert response.status_code == 422
     assert response.json()["error_code"] == "VALIDATION_ERROR"
+
+
+def test_summary_database_error_returns_clear_error_and_safe_log(
+    summary_client,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    client, _ = summary_client
+    error_detail = "summary-database-secret-must-not-be-logged"
+    session = Mock(spec=Session)
+    session.execute.side_effect = SQLAlchemyError(error_detail)
+
+    def unavailable_database() -> Generator[Session, None, None]:
+        yield session
+
+    original_override = app.dependency_overrides[get_db]
+    app.dependency_overrides[get_db] = unavailable_database
+    try:
+        response = client.get(
+            "/api/summaries/monthly",
+            headers=AUTH_HEADERS,
+            params={"year": 2026, "month": 7},
+        )
+    finally:
+        app.dependency_overrides[get_db] = original_override
+
+    assert response.status_code == 500
+    assert response.json()["error_code"] == "DATABASE_ERROR"
+    captured = capfd.readouterr()
+    assert (
+        "Summary database query failed error_type=SQLAlchemyError"
+        in captured.out
+    )
+    assert error_detail not in captured.out
 
 
 def test_invalid_summary_timezone_returns_clear_error(

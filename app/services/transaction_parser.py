@@ -15,9 +15,13 @@ from pydantic import (
     field_validator,
 )
 
-
-
 from app.config import get_settings
+from app.logging_config import get_application_logger
+
+
+_MAX_LOGGED_RESPONSE_CHARS = 500
+logger = get_application_logger(__name__)
+
 TransactionType = Literal["expense", "income"]
 Category = Literal[
     "餐饮",
@@ -135,6 +139,14 @@ def clean_json_text(raw_text: str) -> str:
     return cleaned
 
 
+def _safe_response_snippet(raw_text: str) -> str:
+    """生成单行、定长的模型响应日志片段。"""
+    normalized = " ".join(raw_text.split())
+    if len(normalized) <= _MAX_LOGGED_RESPONSE_CHARS:
+        return normalized
+    return f"{normalized[:_MAX_LOGGED_RESPONSE_CHARS]}..."
+
+
 def validate_model_output(raw_text: str) -> ParsedTransaction:
     """清理、解析并校验模型输出。"""
     cleaned = clean_json_text(raw_text)
@@ -198,6 +210,14 @@ class TransactionParser:
             try:
                 return validate_model_output(raw_output)
             except (json.JSONDecodeError, ValidationError, ValueError) as exc:
+                logger.warning(
+                    "LLM parser output invalid attempt=%s will_retry=%s "
+                    "error_type=%s response_snippet=%r",
+                    attempt + 1,
+                    attempt == 0,
+                    type(exc).__name__,
+                    _safe_response_snippet(raw_output),
+                )
                 last_error = exc
 
         raise InvalidModelOutputError(

@@ -59,34 +59,68 @@ def test_missing_configuration_stops_before_request() -> None:
         client.complete("系统", "用户")
 
 
-def test_timeout_is_converted_to_clear_error() -> None:
+def test_timeout_is_converted_to_clear_error(
+    capfd: pytest.CaptureFixture[str],
+) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout("timeout", request=request)
 
-    settings = Settings(llm_api_key="key", llm_model="model")
+    api_key = "timeout-secret-must-not-be-logged"
+    settings = Settings(llm_api_key=api_key, llm_model="model")
     with httpx.Client(transport=httpx.MockTransport(handler)) as http_client:
         client = LLMClient(settings, http_client)
         with pytest.raises(LLMTimeoutError):
             client.complete("系统", "用户")
 
+    captured = capfd.readouterr()
+    assert "LLM request timed out" in captured.out
+    assert api_key not in captured.out
 
-def test_invalid_response_structure_is_rejected() -> None:
+
+def test_invalid_response_structure_is_rejected(
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    omitted_tail = "response-envelope-tail-must-not-be-logged"
+
     def handler(_: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"choices": []})
+        return httpx.Response(
+            200,
+            json={
+                "choices": [],
+                "diagnostic": ("x" * 600) + omitted_tail,
+            },
+        )
 
-    settings = Settings(llm_api_key="key", llm_model="model")
+    api_key = "response-secret-must-not-be-logged"
+    settings = Settings(llm_api_key=api_key, llm_model="model")
     with httpx.Client(transport=httpx.MockTransport(handler)) as http_client:
         client = LLMClient(settings, http_client)
         with pytest.raises(LLMResponseError):
             client.complete("系统", "用户")
 
+    captured = capfd.readouterr()
+    assert (
+        "LLM response invalid status_code=200 error_type=IndexError"
+        in captured.out
+    )
+    assert "response_snippet='{" in captured.out
+    assert omitted_tail not in captured.out
+    assert api_key not in captured.out
 
-def test_http_error_is_converted_to_clear_error() -> None:
+
+def test_http_error_is_converted_to_clear_error(
+    capfd: pytest.CaptureFixture[str],
+) -> None:
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(503, json={"error": "unavailable"})
 
-    settings = Settings(llm_api_key="key", llm_model="model")
+    api_key = "service-secret-must-not-be-logged"
+    settings = Settings(llm_api_key=api_key, llm_model="model")
     with httpx.Client(transport=httpx.MockTransport(handler)) as http_client:
         client = LLMClient(settings, http_client)
         with pytest.raises(LLMServiceError):
             client.complete("系统", "用户")
+
+    captured = capfd.readouterr()
+    assert "LLM service request failed status_code=503" in captured.out
+    assert api_key not in captured.out

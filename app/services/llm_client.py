@@ -6,9 +6,20 @@ from typing import Any
 import httpx
 
 from app.config import Settings, get_settings
+from app.logging_config import get_application_logger
 
 
 DEFAULT_LLM_BASE_URL = "https://api.openai.com/v1"
+_MAX_LOGGED_RESPONSE_CHARS = 500
+logger = get_application_logger(__name__)
+
+
+def _safe_response_snippet(raw_text: str) -> str:
+    """生成单行、定长的模型响应日志片段。"""
+    normalized = " ".join(raw_text.split())
+    if len(normalized) <= _MAX_LOGGED_RESPONSE_CHARS:
+        return normalized
+    return f"{normalized[:_MAX_LOGGED_RESPONSE_CHARS]}..."
 
 
 class LLMError(Exception):
@@ -76,8 +87,21 @@ class LLMClient:
                     )
             response.raise_for_status()
         except httpx.TimeoutException as exc:
+            logger.error(
+                "LLM request timed out timeout_seconds=%s",
+                self.settings.llm_timeout_seconds,
+            )
             raise LLMTimeoutError("The LLM request timed out.") from exc
         except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+            status_code: int | str = (
+                exc.response.status_code
+                if isinstance(exc, httpx.HTTPStatusError)
+                else "unavailable"
+            )
+            logger.error(
+                "LLM service request failed status_code=%s",
+                status_code,
+            )
             raise LLMServiceError("The LLM request failed.") from exc
 
         return self._extract_content(response)
@@ -110,6 +134,13 @@ class LLMClient:
             choices = response_data["choices"]
             content = choices[0]["message"]["content"]
         except (ValueError, KeyError, IndexError, TypeError) as exc:
+            logger.error(
+                "LLM response invalid status_code=%s error_type=%s "
+                "response_snippet=%r",
+                response.status_code,
+                type(exc).__name__,
+                _safe_response_snippet(response.text),
+            )
             raise LLMResponseError(
                 "The LLM response has an invalid structure."
             ) from exc
