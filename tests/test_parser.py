@@ -132,10 +132,14 @@ def test_markdown_json_block_is_cleaned() -> None:
     assert clean_json_text(output).startswith("{")
 
 
-def test_invalid_json_retries_once_then_succeeds() -> None:
+def test_invalid_json_retries_once_then_succeeds(
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    omitted_tail = "response-tail-must-not-be-logged"
+    invalid_output = "not-json\n" + ("x" * 600) + omitted_tail
     llm_client = Mock()
     llm_client.complete.side_effect = [
-        "not-json",
+        invalid_output,
         model_output(amount=20),
     ]
 
@@ -145,6 +149,10 @@ def test_invalid_json_retries_once_then_succeeds() -> None:
     assert llm_client.complete.call_count == 2
     retry_prompt = llm_client.complete.call_args_list[1].args[1]
     assert "上一次输出不是符合要求的 JSON" in retry_prompt
+    captured = capfd.readouterr()
+    assert "LLM parser output invalid attempt=1 will_retry=True" in captured.out
+    assert "response_snippet='not-json " in captured.out
+    assert omitted_tail not in captured.out
 
 
 def test_configured_default_timezone_is_added_to_prompt() -> None:

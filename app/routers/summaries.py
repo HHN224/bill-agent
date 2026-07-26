@@ -10,12 +10,16 @@ from app.config import Settings, get_settings
 from app.database import get_db
 from app.dependencies import verify_api_token
 from app.errors import APIError
+from app.logging_config import get_application_logger
 from app.schemas import DailySummaryResponse, MonthlySummaryResponse
 from app.services.summary_service import (
     InvalidSummaryTimezoneError,
     get_daily_summary,
     get_monthly_summary,
 )
+
+
+logger = get_application_logger(__name__)
 
 
 router = APIRouter(
@@ -33,6 +37,10 @@ def _summary_error(exc: Exception) -> APIError:
             error_code="INVALID_TIMEZONE_CONFIG",
             message=str(exc),
         )
+    logger.error(
+        "Summary database query failed error_type=%s",
+        type(exc).__name__,
+    )
     return APIError(
         status_code=500,
         error_code="DATABASE_ERROR",

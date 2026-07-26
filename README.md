@@ -40,6 +40,9 @@ cp .env.example .env
 | `LLM_BASE_URL` | 兼容 Chat Completions 的 API 基础地址；留空时使用 OpenAI 默认地址 |
 | `LLM_MODEL` | 厂商提供的模型名称 |
 | `LLM_TIMEOUT_SECONDS` | 单次模型请求超时秒数，默认 8 秒 |
+| `DOMAIN` | Docker 部署使用的公网域名，本机直接运行 Python 时不使用 |
+| `DATA_HOST_DIR` | Docker 部署时绑定挂载 SQLite 数据的 VPS 目录 |
+| `BACKUP_HOST_DIR` | Docker 部署时保存 SQLite 本机备份的 VPS 绝对路径 |
 
 以兼容 OpenAI Chat Completions 的 DeepSeek 服务为例：
 
@@ -313,4 +316,43 @@ python -m pytest -q tests/test_end_to_end.py
 
 ## 当前边界
 
-第一版 MVP 到阶段 5 为止，不包含原生 iOS App、微信小程序、用户注册、多用户系统、邮箱登录、云同步、OCR、微信/支付宝自动读取、银行卡同步、复杂网页前端、AI 月度长篇总结、预算提醒、多币种汇率、发票管理、复杂账户体系、Docker 集群或微服务架构。
+第一版 MVP 到阶段 5 为止，不包含原生 iOS App、微信小程序、用户注册、多用户系统、邮箱登录、云同步、OCR、微信/支付宝自动读取、银行卡同步、复杂网页前端、AI 月度长篇总结、预算提醒、多币种汇率、发票管理、复杂账户体系、Docker 集群或微服务架构。其中"预算提醒"与"AI 月度总结"已确认为未来候选需求；管理员 Web UI 及其后端配套（CORS、年度/自定义区间统计、分类列表 API）在 UI 开工时另行设计，不提前实现。
+
+## 阶段 6：Docker 部署
+
+生产部署、更新、回滚、Token 轮换以及 SQLite 备份恢复的可执行步骤见
+[`docs/deployment.md`](docs/deployment.md)。
+
+决策已定，依据见 `docs/adr/0001-single-vps-deployment-and-token-auth.md`，领域术语见 `CONTEXT.md`。实现与上线检查清单：
+
+1. `Dockerfile`：使用 `python:3.11-slim` 或更新版本，创建并切换到非 root 用户；生产命令使用单进程 Uvicorn，不带 `--reload`，并通过 `--no-access-log` 关闭正常请求访问日志。
+2. `.dockerignore`：排除 `.venv`、`data/`、`.git`、`.env`、`__pycache__`、pytest 缓存和其他本地临时文件，真实密钥不得进入构建上下文。
+3. `docker-compose.yml`：包含 `app` 与 `caddy` 两个服务。`${DATA_HOST_DIR}` 绑定挂载到 app 的 `/app/data`；Caddy 使用独立的 `/data`、`/config` 命名卷。两服务使用 `restart: unless-stopped` 和 `json-file` 日志轮转（如 `max-size: 10m`、`max-file: 3`）。
+4. 网络和配置隔离：app 不发布宿主机端口，只由 Caddy 通过 Compose 内网访问 `app:8000`。app 使用 `env_file: .env`；Caddy 只显式接收 `DOMAIN`，不得获得 LLM Key 或 `APP_API_TOKEN`。
+5. `Caddyfile`：使用部署域名反向代理到 `app:8000`，自动签发和续期 HTTPS 证书。Caddy 对外发布 TCP 80/443，并可发布 UDP 443 以支持 HTTP/3。
+6. `app/main.py` 的 `/health` 增加数据库探活：执行 `SELECT 1`，成功返回 200 与 `{"status":"ok"}`，失败返回 503；Compose HEALTHCHECK 使用镜像已有的 Python 标准库访问该端点，无需仅为探活安装 curl。
+7. 应用日志：使用 stdlib `logging` 显式输出到 stdout，仅记录 LLM 超时/服务错误、模型响应结构错误、解析重试、数据库错误等失败路径。模型原始返回只允许记录清理并截断后的片段，不记录 API Key、Bearer Token、完整提示词或完整模型响应。
+8. 运维文档：补充干净 VPS 的 Docker 与宿主机 `sqlite3` 安装、目录权限准备、DNS、启动、更新、回滚、日志查看、健康检查、Token 轮换、备份与恢复步骤。必须注明修改 `.env` 后使用 `docker compose up -d --force-recreate app`；单纯 `docker compose restart` 不会加载新环境变量。
+9. 备份：宿主机 cron 对 `${DATA_HOST_DIR}/bookkeeping.db` 执行 `sqlite3 .backup`，把一致性快照写入 `${BACKUP_HOST_DIR}`，删除超过 30 天的旧备份。cron 中的 `%` 必须转义；上线前必须完成一次恢复及 `PRAGMA integrity_check` 演练。备份仍位于同一 VPS，不覆盖整机或磁盘丢失风险。
+10. 上线前置人工动作：LLM 厂商控制台设置消费上限/余额告警；域名 A/AAAA 记录正确指向 VPS；防火墙仅向公网开放业务所需的 80/443，同时保留 SSH 管理端口并优先使用密钥登录；确认宿主机未开放 app 的 8000 端口。
+
+实现与验收按以下顺序完成：
+
+1. 先完成 `/health` 数据库探活、失败日志和对应自动化测试。
+2. 编写并验证 `Dockerfile`、`.dockerignore`，确认镜像以非 root 用户运行且能写入准备好的宿主机数据目录。
+3. 加入 Compose 与 Caddy，验证 app 端口不外露、Caddy 自动 HTTPS 所需卷完整、两服务日志轮转生效。
+4. 编写服务器部署、Token 轮换、备份与恢复文档，并在临时目录实际演练。
+5. 在本机或测试 VPS 依次执行构建、启动、健康检查、API 验收、数据持久化、备份恢复和容器重建测试。
+
+阶段 6 验收标准：
+
+- `docker compose config` 校验通过，镜像构建成功，现有 Python 自动化测试全部通过。
+- app 容器内进程不是 root；首次启动能在空的宿主机数据目录中创建数据库。
+- `/health` 在数据库正常时返回 200，在数据库不可用时返回 503，Docker 能据此标记容器健康状态。
+- 宿主机无法直接连接 app 的 8000 端口；HTTP 自动跳转 HTTPS，HTTPS 证书有效。
+- 容器重启、重新构建和普通 `docker compose down && docker compose up -d` 后交易数据仍存在。
+- Token 轮换后旧 Token 返回 401，新 Token 可正常调用，并已同步更新 iPhone 快捷指令。
+- 日志包含需要排查的失败上下文，但不包含任何密钥、完整 Authorization 请求头或完整模型响应。
+- 每日备份能生成且 30 天保留策略有效；从备份恢复后 `PRAGMA integrity_check` 返回 `ok`。
+
+不要执行 `docker compose down -v`，该命令会删除 Caddy 的证书与运行状态卷；不要删除 `${DATA_HOST_DIR}`，其中保存 SQLite 主库。

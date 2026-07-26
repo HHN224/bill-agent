@@ -6,6 +6,7 @@ from unittest.mock import Mock
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings, get_settings
@@ -289,6 +290,38 @@ def test_get_update_and_delete_transaction(
     assert deleted.json()["success"] is True
     assert missing.status_code == 404
     assert missing.json()["error_code"] == "TRANSACTION_NOT_FOUND"
+
+
+def test_database_error_returns_clear_error_and_safe_log(
+    transaction_client,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    client, _, _ = transaction_client
+    error_detail = "transaction-database-secret-must-not-be-logged"
+    session = Mock(spec=Session)
+    session.get.side_effect = SQLAlchemyError(error_detail)
+
+    def unavailable_database() -> Generator[Session, None, None]:
+        yield session
+
+    original_override = app.dependency_overrides[get_db]
+    app.dependency_overrides[get_db] = unavailable_database
+    try:
+        response = client.get(
+            "/api/transactions/1",
+            headers=AUTH_HEADERS,
+        )
+    finally:
+        app.dependency_overrides[get_db] = original_override
+
+    assert response.status_code == 500
+    assert response.json()["error_code"] == "DATABASE_ERROR"
+    captured = capfd.readouterr()
+    assert (
+        "Transaction database operation failed error_type=SQLAlchemyError"
+        in captured.out
+    )
+    assert error_detail not in captured.out
 
 
 def test_update_rejects_invalid_amount_and_empty_body(
