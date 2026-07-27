@@ -235,3 +235,32 @@ curl -fsS "https://${DOMAIN}/health"
 - 旧 Token 返回 401，新 Token 和已更新的 iPhone 快捷指令可正常调用。
 - 日志包含错误上下文但不包含密钥、完整 Authorization 或完整模型响应。
 - 每日 `.backup` 成功、30 天保留生效，并完成恢复与完整性检查演练。
+
+## 11. Alembic 数据库迁移
+
+镜像包含 `alembic.ini` 与 `migrations/`。app 容器的启动顺序固定为：
+
+```text
+python -m alembic upgrade head
+uvicorn app.main:app ...
+```
+
+迁移失败时 Uvicorn 不会启动，Compose 健康检查也不会通过。首次接入 Alembic 时，初始迁移会接管字段兼容的旧 `transactions` 表并写入 `alembic_version`；结构不兼容时会停止并报错，不会删除或重建旧表。
+
+更新前先完成 SQLite 一致性备份，再构建新镜像。可在启动前单独验证迁移：
+
+```bash
+docker compose build app
+docker compose run --rm app python -m alembic current
+docker compose run --rm app python -m alembic upgrade head
+docker compose up -d
+```
+
+查看当前版本与可用迁移：
+
+```bash
+docker compose run --rm app python -m alembic current
+docker compose run --rm app python -m alembic history
+```
+
+代码回滚不会自动回滚数据库结构。数据库降级可能丢失字段或整张表，执行任何 `downgrade` 前必须确认迁移脚本、停止应用并创建可恢复备份；初始迁移的 downgrade 会删除 `transactions` 表，生产环境不得执行。

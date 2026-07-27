@@ -1,0 +1,10 @@
+This directory contains the Alembic database migrations.
+
+Common commands:
+
+    alembic current
+    alembic upgrade head
+    alembic revision --autogenerate -m "describe change"
+    alembic downgrade -1
+
+The database URL is read from the existing DATABASE_URL setting.
