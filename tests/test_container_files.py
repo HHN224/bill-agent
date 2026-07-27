@@ -32,6 +32,8 @@ def test_dockerfile_defines_non_root_production_runtime() -> None:
         in instructions
     )
     assert "COPY --chown=app:app app ./app" in instructions
+    assert "COPY --chown=app:app alembic.ini ./" in instructions
+    assert "COPY --chown=app:app migrations ./migrations" in instructions
     assert "COPY . ." not in instructions
 
     user_index = instructions.index("USER app")
@@ -43,15 +45,12 @@ def test_dockerfile_defines_non_root_production_runtime() -> None:
     assert user_index < command_index
 
     command = json.loads(instructions[command_index].removeprefix("CMD "))
-    assert command == [
-        "uvicorn",
-        "app.main:app",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "8000",
-        "--no-access-log",
-    ]
+    assert command[:2] == ["sh", "-c"]
+    assert command[2].startswith("python -m alembic upgrade head && exec uvicorn ")
+    assert "app.main:app" in command[2]
+    assert "--host 0.0.0.0" in command[2]
+    assert "--port 8000" in command[2]
+    assert "--no-access-log" in command[2]
     assert "--reload" not in content
 
 
@@ -134,6 +133,7 @@ def test_deployment_runbook_covers_required_operations() -> None:
         "DATA_HOST_DIR",
         "BACKUP_HOST_DIR",
         "APP_API_TOKEN",
+        "python -m alembic upgrade head",
         "A/AAAA",
         "80/443",
         "SSH",
