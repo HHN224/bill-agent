@@ -71,9 +71,9 @@ export function ToasterProvider({ children }: { children: ReactNode }) {
           <div
             key={item.id}
             className={cn(
-              "pointer-events-auto flex w-full max-w-sm items-start gap-2.5 rounded-md border px-4 py-3 text-sm shadow-md",
+              "pointer-events-auto flex w-full max-w-sm items-start gap-2.5 rounded-md border-2 px-4 py-3 text-sm shadow-pop",
               item.variant === "destructive"
-                ? "border-destructive/40 bg-card text-foreground"
+                ? "border-destructive/60 bg-card text-foreground"
                 : "border-border bg-card text-foreground",
             )}
           >

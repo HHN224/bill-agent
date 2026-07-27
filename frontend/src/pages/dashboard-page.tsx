@@ -1,7 +1,16 @@
 import { Link } from "react-router-dom";
 
-import { useDailySummary, useMonthlySummary } from "@/api/hooks";
+import {
+  useDailySummary,
+  useMonthlySummary,
+  useRecentMonthlySummaries,
+} from "@/api/hooks";
 import { CategoryDonut } from "@/components/charts/category-donut";
+import { DailyCategoryBars } from "@/components/charts/daily-category-bars";
+import {
+  IncomeExpenseChart,
+  type IncomeExpensePoint,
+} from "@/components/charts/income-expense-chart";
 import { MonthlyTrendChart } from "@/components/charts/monthly-trend-chart";
 import { ErrorState } from "@/components/error-state";
 import { PageHeader } from "@/components/layout/page-header";
@@ -11,27 +20,41 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatAmount } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
+const RECENT_MONTHS = 6;
+
 function MetricCard({
   title,
   value,
   hint,
+  tone,
   emphasize,
 }: {
   title: string;
   value: string;
   hint?: string;
-  emphasize?: "success" | "default";
+  tone?: string;
+  emphasize?: "success" | "danger" | "default";
 }) {
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle>{title}</CardTitle>
+        <CardTitle className="flex items-center gap-1.5">
+          {tone ? (
+            <span
+              aria-hidden
+              className="size-2 shrink-0 rounded-[1px]"
+              style={{ backgroundColor: tone }}
+            />
+          ) : null}
+          {title}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <p
           className={cn(
-            "tnum text-2xl font-semibold tracking-tight",
+            "tnum text-2xl font-bold tracking-tight",
             emphasize === "success" && "text-success",
+            emphasize === "danger" && "text-destructive",
           )}
         >
           {value}
@@ -64,8 +87,24 @@ export function DashboardPage() {
 
   const daily = useDailySummary();
   const monthly = useMonthlySummary(year, month);
+  const recent = useRecentMonthlySummaries(RECENT_MONTHS);
 
-  const hasFailure = daily.isError || monthly.isError;
+  const recentPending = recent.some((query) => query.isPending);
+  const recentFailed = recent.some((query) => query.isError);
+  const hasFailure = daily.isError || monthly.isError || recentFailed;
+
+  // 月度统计响应自带 year/month，直接用于构建对比图数据点。
+  const recentPoints: IncomeExpensePoint[] = recent
+    .map((query) => query.data)
+    .filter((data) => data !== undefined)
+    .map((data) => ({
+      label:
+        data.year === year ? `${data.month}月` : `${data.year}年${data.month}月`,
+      fullLabel: `${data.year} 年 ${data.month} 月`,
+      expense: data.expense_total,
+      income: data.income_total,
+      net: data.net_amount,
+    }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -76,10 +115,11 @@ export function DashboardPage() {
 
       {hasFailure ? (
         <ErrorState
-          error={daily.error ?? monthly.error}
+          error={daily.error ?? monthly.error ?? recent.find((q) => q.error)?.error}
           onRetry={() => {
             void daily.refetch();
             void monthly.refetch();
+            recent.forEach((query) => void query.refetch());
           }}
         />
       ) : (
@@ -97,28 +137,62 @@ export function DashboardPage() {
                   title="今日支出"
                   value={formatAmount(daily.data.expense_total)}
                   hint={`今日共 ${daily.data.transaction_count} 笔`}
+                  tone="var(--color-pop-mustard)"
                 />
                 <MetricCard
                   title="今日收入"
                   value={formatAmount(daily.data.income_total)}
                   emphasize="success"
+                  tone="var(--color-pop-green)"
                 />
                 <MetricCard
                   title="本月支出"
                   value={formatAmount(monthly.data.expense_total)}
                   hint={`本月共 ${monthly.data.transaction_count} 笔`}
+                  tone="var(--color-pop-coral)"
                 />
                 <MetricCard
                   title="本月净额"
                   value={formatAmount(monthly.data.net_amount)}
                   hint={`收入 ${formatAmount(monthly.data.income_total)}`}
                   emphasize={
-                    monthly.data.net_amount >= 0 ? "success" : "default"
+                    monthly.data.net_amount >= 0 ? "success" : "danger"
                   }
+                  tone="var(--color-pop-teal)"
                 />
               </div>
             ) : null}
           </section>
+
+          <div className="grid gap-4 lg:grid-cols-5">
+            <Card className="lg:col-span-3">
+              <CardHeader>
+                <CardTitle>近 {RECENT_MONTHS} 个月收支对比</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {recentPending ? (
+                  <Skeleton className="h-64 w-full" />
+                ) : (
+                  <IncomeExpenseChart points={recentPoints} />
+                )}
+              </CardContent>
+            </Card>
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>本月支出分类</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {monthly.isPending ? (
+                  <Skeleton className="h-52 w-full" />
+                ) : monthly.data ? (
+                  <CategoryDonut
+                    categories={monthly.data.categories}
+                    total={monthly.data.expense_total}
+                  />
+                ) : null}
+              </CardContent>
+            </Card>
+          </div>
 
           <div className="grid gap-4 lg:grid-cols-5">
             <Card className="lg:col-span-3">
@@ -139,15 +213,15 @@ export function DashboardPage() {
             </Card>
             <Card className="lg:col-span-2">
               <CardHeader>
-                <CardTitle>本月支出分类</CardTitle>
+                <CardTitle>今日支出分类</CardTitle>
               </CardHeader>
               <CardContent>
-                {monthly.isPending ? (
+                {daily.isPending ? (
                   <Skeleton className="h-52 w-full" />
-                ) : monthly.data ? (
-                  <CategoryDonut
-                    categories={monthly.data.categories}
-                    total={monthly.data.expense_total}
+                ) : daily.data ? (
+                  <DailyCategoryBars
+                    categories={daily.data.categories}
+                    total={daily.data.expense_total}
                   />
                 ) : null}
               </CardContent>

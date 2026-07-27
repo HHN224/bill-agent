@@ -196,7 +196,7 @@ export function TransactionsPage() {
           aria-busy={isRefetching}
         >
           {/* 桌面端表格 */}
-          <div className="border-border bg-card hidden overflow-hidden rounded-lg border md:block">
+          <div className="border-border bg-card hidden overflow-hidden rounded-lg border-2 shadow-pop md:block">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
@@ -291,7 +291,7 @@ export function TransactionsPage() {
             {list.data.items.map((transaction) => (
               <li
                 key={transaction.id}
-                className="border-border bg-card rounded-lg border p-3.5"
+                className="border-border bg-card rounded-lg border-2 p-3.5 shadow-pop-sm"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -388,7 +388,7 @@ function TransactionListSkeleton() {
   return (
     <div
       aria-label="加载中"
-      className="border-border bg-card overflow-hidden rounded-lg border"
+      className="border-border bg-card overflow-hidden rounded-lg border-2 shadow-pop"
     >
       <div className="divide-border flex flex-col divide-y">
         {Array.from({ length: 8 }, (_, index) => (

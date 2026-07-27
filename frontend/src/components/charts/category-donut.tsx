@@ -29,7 +29,7 @@ export function CategoryDonut({ categories, total }: CategoryDonutProps) {
   }));
 
   return (
-    <div className="flex flex-col items-center gap-6 sm:flex-row">
+    <div className="flex flex-col items-center gap-6">
       <div
         className="relative h-52 w-52 shrink-0"
         role="img"
@@ -44,7 +44,7 @@ export function CategoryDonut({ categories, total }: CategoryDonutProps) {
                 }
                 const item = payload[0];
                 return (
-                  <div className="border-border bg-card rounded-md border px-3 py-2 text-sm shadow-md">
+                  <div className="border-border bg-card rounded-md border-2 px-3 py-2 text-sm shadow-pop-sm">
                     <p className="text-muted-foreground">{item.name}</p>
                     <p className="tnum font-medium">
                       {formatAmount(Number(item.value))}

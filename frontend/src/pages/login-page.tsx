@@ -57,11 +57,11 @@ export function LoginPage() {
         <div className="mb-8 text-center">
           <span
             aria-hidden
-            className="bg-primary text-primary-foreground mx-auto mb-4 flex size-10 items-center justify-center rounded-lg text-base font-bold"
+            className="bg-primary text-primary-foreground shadow-pop-sm mx-auto mb-4 flex size-12 rotate-3 items-center justify-center rounded-lg text-lg font-bold"
           >
             账
           </span>
-          <h1 className="text-lg font-semibold tracking-tight">
+          <h1 className="text-xl font-extrabold tracking-tight">
             Pocket Ledger 后台
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
@@ -71,7 +71,7 @@ export function LoginPage() {
 
         <form
           onSubmit={handleSubmit}
-          className="border-border bg-card rounded-lg border p-6 shadow-xs"
+          className="border-border bg-card rounded-lg border-2 p-6 shadow-pop"
           noValidate
         >
           <div className="flex flex-col gap-1.5">

@@ -1,6 +1,7 @@
 import {
   keepPreviousData,
   useMutation,
+  useQueries,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -55,6 +56,26 @@ export function useMonthlySummary(year: number, month: number) {
     queryKey: ["summaries", "monthly", year, month] as const,
     queryFn: () =>
       api.get<MonthlySummary>("/api/summaries/monthly", { year, month }),
+  });
+}
+
+/**
+ * 近 count 个月（含本月）的月度统计，按时间升序返回查询结果数组。
+ * 复用现有月度统计接口并行拉取，query key 与单月查询共享缓存。
+ */
+export function useRecentMonthlySummaries(count: number) {
+  const base = new Date();
+  const months: { year: number; month: number }[] = [];
+  for (let index = count - 1; index >= 0; index -= 1) {
+    const cursor = new Date(base.getFullYear(), base.getMonth() - index, 1);
+    months.push({ year: cursor.getFullYear(), month: cursor.getMonth() + 1 });
+  }
+  return useQueries({
+    queries: months.map(({ year, month }) => ({
+      queryKey: ["summaries", "monthly", year, month] as const,
+      queryFn: () =>
+        api.get<MonthlySummary>("/api/summaries/monthly", { year, month }),
+    })),
   });
 }
 

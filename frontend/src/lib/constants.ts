@@ -31,19 +31,19 @@ export const DEFAULT_CURRENCY = "CNY";
 export const PAGE_SIZE = 20;
 export const KEYWORD_DEBOUNCE_MS = 350;
 
-/** 环形图使用的克制配色，按分类在 CATEGORIES 中的顺序取色。 */
+/** 图表分类配色：深色底上的复古波普色板，按分类在 CATEGORIES 中的顺序取色。 */
 export const CATEGORY_COLORS: Record<Category, string> = {
-  餐饮: "#c2613b",
-  交通: "#3d6f9e",
-  购物: "#a86fa8",
-  娱乐: "#d0a44a",
-  学习: "#4f8a6d",
-  生活缴费: "#5b7fa6",
-  医疗: "#b05757",
-  社交: "#7c7fc0",
-  住房: "#8a7a5c",
-  收入: "#3f8f5f",
-  其他: "#8a8f98",
+  餐饮: "#df6a4c",
+  交通: "#5b8dc4",
+  购物: "#b983c9",
+  娱乐: "#f0be4f",
+  学习: "#64b5a4",
+  生活缴费: "#7d84c8",
+  医疗: "#d96868",
+  社交: "#c08b5c",
+  住房: "#a8a05c",
+  收入: "#82b366",
+  其他: "#8f8776",
 };
 
 export const PAYMENT_METHOD_SUGGESTIONS = [

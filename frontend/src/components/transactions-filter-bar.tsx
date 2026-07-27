@@ -34,7 +34,7 @@ export function TransactionsFilterBar({
     <div
       role="search"
       aria-label="交易筛选"
-      className="border-border bg-card rounded-lg border p-3 sm:p-4"
+      className="border-border bg-card rounded-lg border-2 p-3 shadow-pop sm:p-4"
     >
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <div className="col-span-2 flex flex-col gap-1.5">

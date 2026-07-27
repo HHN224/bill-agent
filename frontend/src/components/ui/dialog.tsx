@@ -93,7 +93,7 @@ export function Dialog({
     <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
       <div
         aria-hidden
-        className="bg-foreground/40 absolute inset-0"
+        className="absolute inset-0 bg-black/65"
         onClick={close}
       />
       <div
@@ -104,7 +104,7 @@ export function Dialog({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          "border-border bg-card relative w-full max-w-md rounded-lg border p-5 shadow-lg",
+          "border-border bg-card relative w-full max-w-md rounded-lg border-2 p-5 shadow-pop",
           className,
         )}
       >
