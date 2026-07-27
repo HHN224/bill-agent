@@ -1,0 +1,141 @@
+@import "tailwindcss";
+@config "../../tailwind.config.ts";
+
+/*
+ * 深色复古波普主题：暖调油墨黑为底，奶油纸色文字，
+ * 芥末黄 / 珊瑚红 / 复古绿做波普强调色。
+ * 硬边偏移投影 + 半调网点纹理呼应复古印刷海报质感；
+ * 数字统一等宽字体，像老式收银小票与账本。
+ */
+:root {
+  color-scheme: dark;
+
+  --background: #17171a;
+  --foreground: #ece9e2;
+  --card: #22232a;
+  --card-foreground: #ece9e2;
+  --muted: #2d2e36;
+  --muted-foreground: #a5a7b0;
+  --primary: #e9a23b;
+  --primary-foreground: #2a1c07;
+  --secondary: #2f3038;
+  --secondary-foreground: #ece9e2;
+  --accent: #35363f;
+  --accent-foreground: #ece9e2;
+  --destructive: #e0654a;
+  --destructive-foreground: #fdf1e3;
+  --border: #44454f;
+  --input: #4e505b;
+  --ring: #e9a23b;
+  --success: #82b366;
+  --radius: 0.5rem;
+
+  /* 波普强调色：图表与装饰使用。 */
+  --pop-mustard: #f0be4f;
+  --pop-coral: #e0654a;
+  --pop-teal: #5aa7a0;
+  --pop-green: #82b366;
+  --pop-shadow: rgb(0 0 0 / 0.45);
+  --pop-dots: rgb(236 233 226 / 0.05);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+
+  --color-pop-mustard: var(--pop-mustard);
+  --color-pop-coral: var(--pop-coral);
+  --color-pop-teal: var(--pop-teal);
+  --color-pop-green: var(--pop-green);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Courier New",
+    monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-background);
+    /* 半调网点：极低透明度的印刷纹理，不干扰阅读。 */
+    background-image: radial-gradient(
+      var(--pop-dots) 1.1px,
+      transparent 1.1px
+    );
+    background-size: 18px 18px;
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background-color: rgb(233 162 59 / 0.35);
+  }
+
+  /* 可见焦点：键盘导航的基础保障。 */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+/* 波普硬边投影：无模糊偏移阴影，复古海报贴纸感。 */
+@utility shadow-pop {
+  box-shadow: 5px 5px 0 0 var(--pop-shadow);
+}
+
+@utility shadow-pop-sm {
+  box-shadow: 3px 3px 0 0 var(--pop-shadow);
+}
+
+@layer utilities {
+  /* 金额、日期等数字统一等宽字体 + 等宽数字，复古账本扫读感。 */
+  .tnum {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* 尊重 reduced-motion：关闭过渡与动画。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

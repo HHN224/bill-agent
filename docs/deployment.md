@@ -1,11 +1,14 @@
 # 单机 VPS Docker 部署手册
 
-本文用于把记账 API 部署到一台干净的 Linux VPS。生产拓扑固定为：
+本文用于把记账系统（FastAPI 后端 + 后台前端）部署到一台干净的 Linux VPS。生产拓扑固定为：
 
 - Caddy 对公网开放 80/443，自动申请和续期 HTTPS 证书。
+- Caddy 同源托管后台前端构建产物（镜像内 `/srv/frontend`），SPA 路由回退到 `index.html`。
+- `/api`、`/health`、`/docs*`、`/redoc`、`/openapi.json` 由 Caddy 反向代理到 app。
 - app 只在 Compose 内部网络监听 `app:8000`，宿主机不发布 8000。
 - SQLite 主库通过 `DATA_HOST_DIR` 绑定挂载，不保存在容器层。
 - Caddy 的证书和运行状态分别保存在 `caddy_data`、`caddy_config` 命名卷。
+- 前端源码随仓库检出，构建产物由 Dockerfile 的 Node 阶段在镜像构建时生成；服务器不需要安装 Node.js。
 
 架构决策与边界见
 [`docs/adr/0001-single-vps-deployment-and-token-auth.md`](adr/0001-single-vps-deployment-and-token-auth.md)。
@@ -102,12 +105,23 @@ docker compose ps
 docker compose logs --tail=100 app caddy
 ```
 
+`docker compose up -d --build` 会构建两个镜像：`app`（FastAPI）和 `caddy`（Web 入口）。构建 `caddy` 时会先经过 Dockerfile 的 Node 阶段，在构建器内执行 `npm ci` 与 `npm run build` 生成 `frontend/dist`，再连同 `Caddyfile` 一起打进 `caddy:2-alpine` 基础镜像；前端构建失败会让整个构建失败，不会上线半成品。
+
 验证 HTTP 自动跳转、HTTPS 和数据库探活：
 
 ```bash
 curl -I "http://${DOMAIN}/health"
 curl -fsS "https://${DOMAIN}/health"
 ```
+
+验证前端托管与 SPA 回退（应返回 `index.html` 的内容）：
+
+```bash
+curl -fsS "https://${DOMAIN}/" | head -n 5
+curl -fsS "https://${DOMAIN}/transactions" | head -n 5
+```
+
+打开 `https://${DOMAIN}/login`，输入 `.env` 中的 `ADMIN_API_TOKEN` 应能进入总览页。
 
 成功的健康响应为 `{"status":"ok"}`。下面的命令不应显示宿主机端口映射：
 
@@ -126,24 +140,22 @@ docker compose logs -f --tail=100 caddy
 
 ## 5. 更新与回滚
 
-更新前先确认备份可用，然后拉取受信任版本并重建：
+前端源码与后端同仓库，服务器 `git pull` 会一并拉取；前端产物由 Docker 多阶段构建生成，不需要手动上传构建产物。更新前先确认备份可用，然后拉取受信任版本并重建：
 
 ```bash
 cd /opt/bookkeeping
 git pull --ff-only
 docker compose config --quiet
-docker compose build --pull app
-docker compose up -d
+docker compose up -d --build
 docker compose ps
 curl -fsS "https://${DOMAIN}/health"
 ```
 
-回滚时检出已知可用的 tag 或 commit，再重建 app：
+回滚时检出已知可用的 tag 或 commit，再重建：
 
 ```bash
 git checkout YOUR_KNOWN_GOOD_TAG_OR_COMMIT
-docker compose build app
-docker compose up -d
+docker compose up -d --build
 curl -fsS "https://${DOMAIN}/health"
 ```
 
@@ -237,6 +249,8 @@ curl -fsS "https://${DOMAIN}/health"
 - `docker compose config --quiet` 和镜像构建均成功。
 - app 容器进程 UID 为 10001，健康状态为 `healthy`。
 - 宿主机没有 app 的 8000 映射；HTTP 跳转 HTTPS，正式证书有效。
+- 前端 `index.html` 与静态资源正常返回，刷新 `/transactions` 等前端路由不 404。
+- `/api/transactions` 未带 Token 返回 401；浏览器中使用 `ADMIN_API_TOKEN` 能完成登录、新增、编辑、删除与统计查看。
 - 空数据目录首次启动可创建数据库，重新创建容器后数据仍存在。
 - 两枚 Token 不能互换；各自的旧值返回 401，新值能访问对应权限接口。
 - 日志包含错误上下文但不包含密钥、完整 Authorization 或完整模型响应。

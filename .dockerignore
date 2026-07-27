@@ -19,3 +19,9 @@ README.md
 CONTEXT.md
 pytest.ini
 run.py
+frontend/node_modules/
+frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
+frontend/coverage/
+.opencode/

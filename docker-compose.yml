@@ -9,6 +9,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: app
     restart: unless-stopped
     init: true
     env_file:
@@ -30,7 +31,10 @@ services:
     logging: *default-logging
 
   caddy:
-    image: caddy:2-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
     restart: unless-stopped
     depends_on:
       app:
@@ -42,7 +46,6 @@ services:
       - "443:443"
       - "443:443/udp"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     logging: *default-logging
