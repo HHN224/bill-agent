@@ -1,7 +1,5 @@
 """FastAPI 应用入口。"""
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import Depends, FastAPI
@@ -9,7 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.database import get_db, initialize_database
+from app.database import get_db
 from app.errors import APIError, register_exception_handlers
 from app.logging_config import get_application_logger
 from app.routers.summaries import router as summaries_router
@@ -20,17 +18,9 @@ from app.schemas import HealthResponse
 logger = get_application_logger(__name__)
 
 
-@asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """应用启动时初始化持久化资源。"""
-    initialize_database()
-    yield
-
-
 app = FastAPI(
     title="Natural Language Bookkeeping API",
     version="0.5.0",
-    lifespan=lifespan,
 )
 
 register_exception_handlers(app)

@@ -60,16 +60,18 @@ LLM_TIMEOUT_SECONDS=8
 激活虚拟环境后运行：
 
 ```powershell
+python -m alembic upgrade head
 python run.py
 ```
 
 也可以直接使用 Uvicorn：
 
 ```powershell
+python -m alembic upgrade head
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-首次启动会自动创建 `data/bookkeeping.db` 和 `transactions` 表。
+首次执行迁移会创建 `data/bookkeeping.db`、`transactions` 表和 Alembic 版本记录；后续执行只应用尚未运行的新迁移。
 
 可访问：
 
@@ -356,3 +358,18 @@ python -m pytest -q tests/test_end_to_end.py
 - 每日备份能生成且 30 天保留策略有效；从备份恢复后 `PRAGMA integrity_check` 返回 `ok`。
 
 不要执行 `docker compose down -v`，该命令会删除 Caddy 的证书与运行状态卷；不要删除 `${DATA_HOST_DIR}`，其中保存 SQLite 主库。
+
+## 数据库迁移（Alembic）
+
+数据库结构由 Alembic 管理。Docker 容器启动时会先执行 `python -m alembic upgrade head`，迁移成功后才启动 API；迁移失败时容器会退出，不会让旧结构数据库继续提供服务。
+
+本地常用命令：
+
+```powershell
+python -m alembic current
+python -m alembic upgrade head
+python -m alembic revision --autogenerate -m "描述本次结构变更"
+python -m alembic check
+```
+
+修改 ORM 模型后，应生成并人工检查迁移文件，再运行测试。不要用 `Base.metadata.create_all()` 代替生产迁移。初始迁移可以接管本项目旧版本创建的兼容 `transactions` 表；如果现有字段不兼容，迁移会拒绝启动，避免静默覆盖数据。
