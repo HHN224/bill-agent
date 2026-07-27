@@ -22,7 +22,8 @@ from app.services.llm_client import LLMTimeoutError
 from app.services.transaction_parser import ParsedTransaction
 
 
-AUTH_HEADERS = {"Authorization": "Bearer test-token"}
+SHORTCUT_HEADERS = {"Authorization": "Bearer test-shortcut-token"}
+ADMIN_HEADERS = {"Authorization": "Bearer test-admin-token"}
 
 
 def parsed_transaction(
@@ -76,7 +77,8 @@ def transaction_client(
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_transaction_parser] = lambda: parser
     app.dependency_overrides[get_settings] = lambda: Settings(
-        app_api_token="test-token",
+        app_api_token="test-shortcut-token",
+        admin_api_token="test-admin-token",
         default_timezone="Asia/Taipei",
     )
 
@@ -95,7 +97,7 @@ def test_parse_and_create_saves_complete_transaction(
 
     response = client.post(
         "/api/transactions/parse-and-create",
-        headers=AUTH_HEADERS,
+        headers=SHORTCUT_HEADERS,
         json={
             "text": "中午食堂牛肉饭18块5，微信支付",
             "timezone": "Asia/Taipei",
@@ -118,6 +120,78 @@ def test_parse_and_create_saves_complete_transaction(
         assert saved.raw_text == "中午食堂牛肉饭18块5，微信支付"
         assert saved.tags == ["食堂", "午餐"]
         assert saved.occurred_at.tzinfo is not None
+
+
+def test_manual_create_saves_without_calling_parser(
+    transaction_client,
+) -> None:
+    client, parser, testing_session = transaction_client
+
+    response = client.post(
+        "/api/transactions/manual",
+        headers=ADMIN_HEADERS,
+        json={
+            "type": "expense",
+            "amount": 18.5,
+            "currency": "CNY",
+            "category": "餐饮",
+            "subcategory": "午餐",
+            "merchant": "学校食堂",
+            "payment_method": "微信",
+            "occurred_at": "2026-07-24T12:20:00+08:00",
+            "note": "牛肉饭",
+            "tags": ["食堂", "午餐"],
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["amount"] == 18.5
+    assert response.json()["raw_text"] == ""
+    assert response.json()["confidence"] is None
+    parser.parse.assert_not_called()
+    with testing_session() as session:
+        saved = session.scalar(select(Transaction))
+        assert saved is not None
+        assert saved.note == "牛肉饭"
+        assert saved.confidence is None
+
+
+def test_shortcut_token_cannot_use_admin_endpoints(
+    transaction_client,
+) -> None:
+    client, parser, _ = transaction_client
+
+    response = client.post(
+        "/api/transactions/manual",
+        headers=SHORTCUT_HEADERS,
+        json={
+            "amount": 18.5,
+            "category": "餐饮",
+            "occurred_at": "2026-07-24T12:20:00+08:00",
+        },
+    )
+
+    assert response.status_code == 401
+    parser.parse.assert_not_called()
+
+
+def test_manual_create_rejects_invalid_data(
+    transaction_client,
+) -> None:
+    client, parser, _ = transaction_client
+
+    response = client.post(
+        "/api/transactions/manual",
+        headers=ADMIN_HEADERS,
+        json={
+            "amount": 0,
+            "category": "餐饮",
+            "occurred_at": "2026-07-24T12:20:00",
+        },
+    )
+
+    assert response.status_code == 422
+    parser.parse.assert_not_called()
 
 
 def test_wrong_token_returns_401_without_calling_parser(
@@ -144,7 +218,7 @@ def test_missing_amount_requires_confirmation_without_saving(
 
     response = client.post(
         "/api/transactions/parse-and-create",
-        headers=AUTH_HEADERS,
+        headers=SHORTCUT_HEADERS,
         json={"text": "中午吃了牛肉饭"},
     )
 
@@ -166,7 +240,7 @@ def test_llm_timeout_returns_clear_error_without_saving(
 
     response = client.post(
         "/api/transactions/parse-and-create",
-        headers=AUTH_HEADERS,
+        headers=SHORTCUT_HEADERS,
         json={"text": "午饭15"},
     )
 
@@ -185,7 +259,7 @@ def test_empty_text_returns_unified_validation_error(
 
     response = client.post(
         "/api/transactions/parse-and-create",
-        headers=AUTH_HEADERS,
+        headers=SHORTCUT_HEADERS,
         json={"text": "   "},
     )
 
@@ -214,18 +288,23 @@ def test_list_transactions_supports_order_and_filters(
     for text in ("昨天打车23块", "今天食堂牛肉饭18块5"):
         create_response = client.post(
             "/api/transactions/parse-and-create",
-            headers=AUTH_HEADERS,
+            headers=SHORTCUT_HEADERS,
             json={"text": text},
         )
         assert create_response.status_code == 200
 
     response = client.get(
         "/api/transactions",
-        headers=AUTH_HEADERS,
+        headers=ADMIN_HEADERS,
+    )
+    paged = client.get(
+        "/api/transactions",
+        headers=ADMIN_HEADERS,
+        params={"limit": 1, "offset": 0},
     )
     filtered = client.get(
         "/api/transactions",
-        headers=AUTH_HEADERS,
+        headers=ADMIN_HEADERS,
         params={
             "start_date": "2026-07-24",
             "end_date": "2026-07-24",
@@ -236,10 +315,18 @@ def test_list_transactions_supports_order_and_filters(
     )
 
     assert response.status_code == 200
-    assert [item["note"] for item in response.json()] == ["牛肉饭", "打车"]
+    assert response.json()["total"] == 2
+    assert paged.status_code == 200
+    assert paged.json()["total"] == 2
+    assert len(paged.json()["items"]) == 1
+    assert [item["note"] for item in response.json()["items"]] == [
+        "牛肉饭",
+        "打车",
+    ]
     assert filtered.status_code == 200
-    assert len(filtered.json()) == 1
-    assert filtered.json()[0]["category"] == "餐饮"
+    assert filtered.json()["total"] == 1
+    assert len(filtered.json()["items"]) == 1
+    assert filtered.json()["items"][0]["category"] == "餐饮"
 
 
 def test_get_update_and_delete_transaction(
@@ -249,18 +336,18 @@ def test_get_update_and_delete_transaction(
     parser.parse.return_value = parsed_transaction()
     created = client.post(
         "/api/transactions/parse-and-create",
-        headers=AUTH_HEADERS,
+        headers=SHORTCUT_HEADERS,
         json={"text": "午饭18块5"},
     ).json()["transaction"]
     transaction_id = created["id"]
 
     fetched = client.get(
         f"/api/transactions/{transaction_id}",
-        headers=AUTH_HEADERS,
+        headers=ADMIN_HEADERS,
     )
     updated = client.patch(
         f"/api/transactions/{transaction_id}",
-        headers=AUTH_HEADERS,
+        headers=ADMIN_HEADERS,
         json={
             "amount": 20.25,
             "category": "购物",
@@ -273,11 +360,11 @@ def test_get_update_and_delete_transaction(
     )
     deleted = client.delete(
         f"/api/transactions/{transaction_id}",
-        headers=AUTH_HEADERS,
+        headers=ADMIN_HEADERS,
     )
     missing = client.get(
         f"/api/transactions/{transaction_id}",
-        headers=AUTH_HEADERS,
+        headers=ADMIN_HEADERS,
     )
 
     assert fetched.status_code == 200
@@ -309,7 +396,7 @@ def test_database_error_returns_clear_error_and_safe_log(
     try:
         response = client.get(
             "/api/transactions/1",
-            headers=AUTH_HEADERS,
+            headers=ADMIN_HEADERS,
         )
     finally:
         app.dependency_overrides[get_db] = original_override
@@ -331,18 +418,18 @@ def test_update_rejects_invalid_amount_and_empty_body(
     parser.parse.return_value = parsed_transaction()
     transaction_id = client.post(
         "/api/transactions/parse-and-create",
-        headers=AUTH_HEADERS,
+        headers=SHORTCUT_HEADERS,
         json={"text": "午饭18块5"},
     ).json()["transaction"]["id"]
 
     invalid_amount = client.patch(
         f"/api/transactions/{transaction_id}",
-        headers=AUTH_HEADERS,
+        headers=ADMIN_HEADERS,
         json={"amount": 0},
     )
     empty_update = client.patch(
         f"/api/transactions/{transaction_id}",
-        headers=AUTH_HEADERS,
+        headers=ADMIN_HEADERS,
         json={},
     )
 

@@ -48,7 +48,7 @@ def summary_client(
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_settings] = lambda: Settings(
-        app_api_token="test-token",
+        admin_api_token="test-token",
         default_timezone="Asia/Taipei",
     )
 
@@ -317,7 +317,7 @@ def test_invalid_summary_timezone_returns_clear_error(
 ) -> None:
     client, _ = summary_client
     app.dependency_overrides[get_settings] = lambda: Settings(
-        app_api_token="test-token",
+        admin_api_token="test-token",
         default_timezone="Invalid/Timezone",
     )
 

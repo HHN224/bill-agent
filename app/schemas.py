@@ -7,6 +7,7 @@ from typing import Any, Literal
 from pydantic import (
     BaseModel,
     ConfigDict,
+    Field,
     field_serializer,
     field_validator,
     model_validator,
@@ -81,6 +82,36 @@ class ParseAndCreateResponse(BaseModel):
     parsed_data: ParsedTransaction | None = None
 
 
+class ManualTransactionCreate(BaseModel):
+    """后台表单直接创建交易的请求，不经过大模型。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["expense", "income"] = "expense"
+    amount: PositiveAmount
+    currency: str = Field(default="CNY", pattern=r"^[A-Z]{3}$")
+    category: Category
+    subcategory: str | None = Field(default=None, max_length=64)
+    merchant: str | None = Field(default=None, max_length=128)
+    payment_method: str | None = Field(default=None, max_length=64)
+    occurred_at: datetime
+    note: str | None = Field(default=None, max_length=255)
+    tags: list[str] = Field(default_factory=list)
+
+    @field_validator("occurred_at")
+    @classmethod
+    def occurred_at_must_include_timezone(
+        cls,
+        value: datetime,
+    ) -> datetime:
+        """手工交易也必须携带明确时区，避免服务器时区造成日期偏移。"""
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError(
+                "occurred_at must include a timezone offset."
+            )
+        return value
+
+
 class TransactionUpdate(BaseModel):
     """用户可以修正的账单字段。"""
 
@@ -125,6 +156,13 @@ class DeleteTransactionResponse(BaseModel):
 
     success: Literal[True]
     message: str
+
+
+class TransactionListResponse(BaseModel):
+    """后台分页列表及当前筛选条件下的总条数。"""
+
+    items: list[TransactionResponse]
+    total: int
 
 
 class ErrorResponse(BaseModel):

@@ -2,36 +2,62 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 from app.config import Settings, get_settings
-from app.dependencies import verify_api_token
+from app.dependencies import verify_admin_token, verify_shortcut_token
 
 
 def create_test_app() -> FastAPI:
     test_app = FastAPI()
     test_app.dependency_overrides[get_settings] = lambda: Settings(
-        app_api_token="test-token"
+        app_api_token="shortcut-token",
+        admin_api_token="admin-token",
     )
 
-    @test_app.get("/protected", dependencies=[Depends(verify_api_token)])
-    def protected() -> dict[str, bool]:
+    @test_app.get(
+        "/shortcut",
+        dependencies=[Depends(verify_shortcut_token)],
+    )
+    def shortcut() -> dict[str, bool]:
+        return {"success": True}
+
+    @test_app.get(
+        "/admin",
+        dependencies=[Depends(verify_admin_token)],
+    )
+    def admin() -> dict[str, bool]:
         return {"success": True}
 
     return test_app
 
 
-def test_valid_token_allows_access() -> None:
+def test_each_token_only_allows_its_own_scope() -> None:
     with TestClient(create_test_app()) as client:
-        response = client.get(
-            "/protected",
-            headers={"Authorization": "Bearer test-token"},
+        shortcut_allowed = client.get(
+            "/shortcut",
+            headers={"Authorization": "Bearer shortcut-token"},
+        )
+        shortcut_denied_admin = client.get(
+            "/admin",
+            headers={"Authorization": "Bearer shortcut-token"},
+        )
+        admin_allowed = client.get(
+            "/admin",
+            headers={"Authorization": "Bearer admin-token"},
+        )
+        admin_denied_shortcut = client.get(
+            "/shortcut",
+            headers={"Authorization": "Bearer admin-token"},
         )
 
-    assert response.status_code == 200
+    assert shortcut_allowed.status_code == 200
+    assert shortcut_denied_admin.status_code == 401
+    assert admin_allowed.status_code == 200
+    assert admin_denied_shortcut.status_code == 401
 
 
 def test_invalid_token_returns_401() -> None:
     with TestClient(create_test_app()) as client:
         response = client.get(
-            "/protected",
+            "/admin",
             headers={"Authorization": "Bearer wrong-token"},
         )
 
@@ -41,6 +67,6 @@ def test_invalid_token_returns_401() -> None:
 
 def test_missing_token_returns_401() -> None:
     with TestClient(create_test_app()) as client:
-        response = client.get("/protected")
+        response = client.get("/shortcut")
 
     assert response.status_code == 401
