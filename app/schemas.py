@@ -115,8 +115,10 @@ class ManualTransactionCreate(BaseModel):
 class TransactionUpdate(BaseModel):
     """用户可以修正的账单字段。"""
 
+    type: Literal["expense", "income"] | None = None
     amount: PositiveAmount | None = None
     category: Category | None = None
+    subcategory: str | None = Field(default=None, max_length=64)
     occurred_at: datetime | None = None
     merchant: str | None = None
     note: str | None = None
@@ -144,7 +146,13 @@ class TransactionUpdate(BaseModel):
         """拒绝空修改和不允许置空的字段。"""
         if not self.model_fields_set:
             raise ValueError("At least one field must be provided.")
-        required_values = {"amount", "category", "occurred_at", "tags"}
+        required_values = {
+            "type",
+            "amount",
+            "category",
+            "occurred_at",
+            "tags",
+        }
         for field_name in self.model_fields_set & required_values:
             if getattr(self, field_name) is None:
                 raise ValueError(f"{field_name} cannot be null.")

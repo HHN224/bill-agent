@@ -81,7 +81,7 @@
 ## 详情、修改、删除
 
 - `GET /api/transactions/{id}`：返回 `Transaction`。
-- `PATCH /api/transactions/{id}`：至少提供一个字段，可修改 `amount`、`category`、`occurred_at`、`merchant`、`note`、`payment_method`、`tags`。
+- `PATCH /api/transactions/{id}`：至少提供一个字段，可修改 `type`、`amount`、`category`、`subcategory`、`occurred_at`、`merchant`、`note`、`payment_method`、`tags`。`subcategory`、`merchant`、`note` 和 `payment_method` 可设为 `null` 以清空；`currency` 不可修改。
 - `DELETE /api/transactions/{id}`：永久删除，成功返回 `{"success": true, "message": "Transaction deleted."}`。
 
 删除前应在 UI 中二次确认。收到 `404 TRANSACTION_NOT_FOUND` 时刷新当前列表。

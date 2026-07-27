@@ -349,8 +349,10 @@ def test_get_update_and_delete_transaction(
         f"/api/transactions/{transaction_id}",
         headers=ADMIN_HEADERS,
         json={
+            "type": "income",
             "amount": 20.25,
-            "category": "购物",
+            "subcategory": None,
+            "category": "收入",
             "note": "修正后的备注",
             "merchant": None,
             "payment_method": "现金",
@@ -369,8 +371,10 @@ def test_get_update_and_delete_transaction(
 
     assert fetched.status_code == 200
     assert updated.status_code == 200
+    assert updated.json()["type"] == "income"
     assert updated.json()["amount"] == 20.25
-    assert updated.json()["category"] == "购物"
+    assert updated.json()["subcategory"] is None
+    assert updated.json()["category"] == "收入"
     assert updated.json()["merchant"] is None
     assert updated.json()["tags"] == ["修正"]
     assert deleted.status_code == 200
@@ -433,5 +437,18 @@ def test_update_rejects_invalid_amount_and_empty_body(
         json={},
     )
 
+    invalid_type = client.patch(
+        f"/api/transactions/{transaction_id}",
+        headers=ADMIN_HEADERS,
+        json={"type": "transfer"},
+    )
+    null_type = client.patch(
+        f"/api/transactions/{transaction_id}",
+        headers=ADMIN_HEADERS,
+        json={"type": None},
+    )
+
     assert invalid_amount.status_code == 422
     assert empty_update.status_code == 422
+    assert invalid_type.status_code == 422
+    assert null_type.status_code == 422

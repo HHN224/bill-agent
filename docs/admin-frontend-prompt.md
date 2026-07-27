@@ -1,9 +1,9 @@
 # 后台管理系统构建 Prompt
 
-把下面整段内容连同本仓库交给负责前端界面的 AI。它以当前后端 API 为唯一事实来源；开始编码前应阅读 `README.md`、`docs/admin-api.md` 和 FastAPI `/openapi.json`。
+把下面整段内容连同本仓库交给负责前端界面的 AI。它以当前后端 API 为唯一事实来源；开始编码前应阅读 `README.md`、`docs/admin-api.md`、`docs/admin-backlog.md` 和 FastAPI `/openapi.json`。
 
 ```text
-你是一名资深前端与产品设计工程师。请在这个“个人自然语言记账”仓库的现有 FastAPI 后端之上，设计并实现一个精致、克制、响应式的单用户后台管理系统。不要改写现有后端业务语义，也不要虚构 API；先阅读 README.md、docs/admin-api.md，并在开发环境核对 /openapi.json。
+你是一名资深前端与产品设计工程师。请在这个“个人自然语言记账”仓库的现有 FastAPI 后端之上，设计并实现一个精致、克制、响应式的单用户后台管理系统。不要改写现有后端业务语义，也不要虚构 API；先阅读 README.md、docs/admin-api.md、docs/admin-backlog.md，并在开发环境核对 /openapi.json。
 
 产品目标：
 - 让我快速查看本月财务状态、筛选和分页浏览交易、手工新增交易、编辑或删除错误交易。
@@ -16,7 +16,7 @@
 3. 手工新增必须调用 POST /api/transactions/manual，绝不能调用 /parse-and-create，因此不会消耗大模型额度。
 4. 列表 GET /api/transactions 返回 {items: Transaction[], total: number}，不是数组。分页参数为 limit、offset；总页数为 Math.ceil(total / limit)。筛选变化后回到第 1 页。
 5. 列表支持 start_date、end_date、category、type、keyword；日期边界由后端默认时区处理。
-6. 详情、修改、删除分别使用 GET/PATCH/DELETE /api/transactions/{id}。
+6. 详情、修改、删除分别使用 GET/PATCH/DELETE /api/transactions/{id}。PATCH 可修改 type、amount、category、subcategory、occurred_at、merchant、note、payment_method、tags；subcategory 可用 null 清空，currency 不可修改。
 7. 今日和月度统计分别使用 /api/summaries/daily 与 /api/summaries/monthly?year=...&month=...。
 8. occurred_at 提交时必须包含明确时区偏移，例如 2026-07-27T12:20:00+08:00。
 9. 一级分类固定为：餐饮、交通、购物、娱乐、学习、生活缴费、医疗、社交、住房、收入、其他。
@@ -49,7 +49,7 @@ C. 交易列表页
 
 D. 新增/编辑交易
 - 新增调用 /manual；编辑调用 PATCH /{id}。
-- 金额输入避免浮点展示问题；类型默认为支出，收入时可合理预选“收入”分类但允许修改。
+- 金额输入避免浮点展示问题；新增时类型默认为支出，收入时可合理预选“收入”分类但允许修改；编辑时允许纠正收入/支出类型和清空子分类。
 - 日期时间控件以用户本地时间编辑，提交时转换成带偏移的 ISO 8601。
 - 标签支持输入、回车确认与删除；可选字段可留空。
 - 保存中禁用重复提交；成功后提示并刷新相关列表和统计缓存。
