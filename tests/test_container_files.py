@@ -18,10 +18,16 @@ def test_dockerfile_defines_non_root_production_runtime() -> None:
         if line.strip() and not line.lstrip().startswith("#")
     ]
 
-    from_instruction = instructions[0]
-    image_match = re.fullmatch(
+    from_instructions = [
+        line for line in instructions if line.startswith("FROM ")
+    ]
+    python_stage = next(
+        (line for line in from_instructions if "python:" in line),
+        "",
+    )
+    image_match = re.search(
         r"FROM python:(\d+)\.(\d+)-slim(?:-[a-z0-9]+)?",
-        from_instruction,
+        python_stage,
     )
     assert image_match is not None
     assert tuple(map(int, image_match.groups())) >= (3, 11)
@@ -52,6 +58,48 @@ def test_dockerfile_defines_non_root_production_runtime() -> None:
     assert "--port 8000" in command[2]
     assert "--no-access-log" in command[2]
     assert "--reload" not in content
+
+
+def test_dockerfile_builds_frontend_and_serves_it_via_caddy() -> None:
+    """前端产物在镜像构建期生成，并由 Caddy 目标阶段同源托管。"""
+    dockerfile_path = PROJECT_ROOT / "Dockerfile"
+    content = dockerfile_path.read_text(encoding="utf-8")
+    instructions = [
+        line.strip()
+        for line in content.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    from_instructions = [
+        line for line in instructions if line.startswith("FROM ")
+    ]
+
+    # 前端构建阶段：安装依赖并产出 frontend/dist。
+    node_stage = next(
+        (line for line in from_instructions if "node:" in line),
+        "",
+    )
+    assert node_stage, "Dockerfile must include a Node.js frontend build stage."
+    node_image_match = re.search(r"node:(\d+)", node_stage)
+    assert node_image_match is not None
+    assert int(node_image_match.group(1)) >= 20
+    assert any(
+        instruction.startswith("RUN npm ci") for instruction in instructions
+    )
+    assert "RUN npm run build" in instructions
+
+    # Web 阶段：Caddy 携带配置与前端产物。
+    web_stage = next(
+        (line for line in from_instructions if "caddy:" in line),
+        "",
+    )
+    assert web_stage, "Dockerfile must include a Caddy web stage."
+    assert "COPY Caddyfile /etc/caddy/Caddyfile" in instructions
+    assert any(
+        instruction.endswith("/srv/frontend")
+        and "dist" in instruction
+        and instruction.startswith("COPY --from=")
+        for instruction in instructions
+    )
 
 
 def test_dockerignore_excludes_secrets_and_local_artifacts() -> None:
@@ -87,6 +135,8 @@ def test_compose_defines_private_app_and_isolated_caddy() -> None:
     content = compose_path.read_text(encoding="utf-8")
     assert "app:" in content
     assert "caddy:" in content
+    assert "target: app" in content
+    assert "target: web" in content
     assert "env_file:" in content
     assert "- .env" in content
     assert "${DATA_HOST_DIR:-./data}:/app/data" in content
@@ -108,8 +158,16 @@ def test_caddyfile_terminates_https_for_the_configured_domain() -> None:
 
     content = caddyfile_path.read_text(encoding="utf-8")
     assert "{$DOMAIN}" in content
-    assert "reverse_proxy app:8000" in content
+    assert "reverse_proxy" in content
+    assert "app:8000" in content
     assert "http://" not in content
+
+    # 前端同源托管：静态根目录、SPA 回退，以及 API 路径转发。
+    assert "root * /srv/frontend" in content
+    assert "try_files {path} /index.html" in content
+    assert "/api/*" in content
+    assert "/health" in content
+    assert "/openapi.json" in content
 
 
 def test_deployment_runbook_covers_required_operations() -> None:

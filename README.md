@@ -1,11 +1,12 @@
-# Pocket Ledger API
+# Pocket Ledger
 
-一个为个人使用设计的自然语言记账后端：iPhone 快捷指令说一句话即可记账，同时为后台管理页面提供不经过大模型的结构化 CRUD、分页查询和收支统计。
+一个为个人使用设计的自然语言记账系统：iPhone 快捷指令说一句话即可记账；自带同源部署的后台管理页面，提供不经过大模型的结构化 CRUD、分页查询和收支统计。
 
 ## 功能亮点
 
 - 自然语言记账：调用大模型解析金额、分类、时间、商户和备注。
 - 手工记账：后台表单直接写库，不消耗模型额度，响应更快。
+- 后台管理页面：React 单页应用，覆盖总览统计、交易管理、手工新增与编辑，移动端自适应。
 - 交易管理：按日期、分类、类型和关键词筛选，支持分页、详情、修改和删除。
 - 收支统计：提供今日和月度汇总，统计完全由 SQLite 计算。
 - 权限隔离：手机快捷指令和后台管理使用两枚不同的 Bearer Token。
@@ -193,9 +194,52 @@ python -m alembic check
 
 测试覆盖解析、两枚 Token 的权限隔离、手工记账不调用模型、筛选分页总数、CRUD、统计、迁移、容器配置和完整调用链。
 
+## 后台前端（frontend/）
+
+`frontend/` 是与 `app/` 平级的后台管理单页应用：Vite + React 19 + TypeScript（严格模式）+ Tailwind CSS 4 + shadcn/ui 风格组件 + React Router + TanStack Query + React Hook Form/Zod + Recharts。
+
+本地开发（前端开发服务器把 `/api` 代理到本地后端，无需 CORS）：
+
+```powershell
+python run.py                    # 终端 1：后端监听 127.0.0.1:8000
+cd frontend
+npm install                      # 首次
+npm run dev                      # 终端 2：前端监听 127.0.0.1:5173
+```
+
+打开 <http://127.0.0.1:5173>，输入 `.env` 中的 `ADMIN_API_TOKEN` 登录。凭证只保存在页面内存中，刷新后需重新输入；它不会进入源码、构建产物、URL 或 localStorage。
+
+常用命令（均在 `frontend/` 下）：
+
+| 命令 | 用途 |
+| --- | --- |
+| `npm run dev` | 开发服务器（代理 `/api` 到 127.0.0.1:8000） |
+| `npm run build` | 类型检查 + 生产构建到 `frontend/dist` |
+| `npm run preview` | 本地预览生产构建 |
+| `npm run test` | Vitest 单元/组件测试（MSW 拦截接口） |
+| `npm run test:e2e` | Playwright 端到端测试 |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run format` | Prettier |
+
+E2E 需要可用后端，并通过环境变量注入凭证（不要写进任何文件）：
+
+```powershell
+$env:E2E_ADMIN_TOKEN = "本地 .env 中的 ADMIN_API_TOKEN"
+npm run test:e2e
+```
+
 ## 部署与升级
 
-生产环境使用单 VPS 的 Docker Compose：Caddy 负责 HTTPS，FastAPI 仅暴露在 Compose 内网，SQLite 绑定挂载到宿主机。
+生产环境使用单 VPS 的 Docker Compose：Caddy 负责 HTTPS 并同源托管后台前端（`/srv/frontend`，SPA 回退到 `index.html`），`/api`、`/health`、`/docs*`、`/redoc`、`/openapi.json` 反向代理到仅暴露在 Compose 内网的 FastAPI，SQLite 绑定挂载到宿主机。
+
+前端源码随仓库一起 `git pull` 到服务器，前端产物由 Docker 多阶段构建生成（Node 阶段执行 `npm ci && npm run build`），服务器无需安装 Node.js，也无需提交 `node_modules` 或构建产物。标准更新命令：
+
+```bash
+cd /path/to/bill-agent
+git pull
+docker compose up -d --build
+```
 
 完整步骤见 [部署、更新、Token 轮换、备份与恢复手册](docs/deployment.md)。从早期单 Token 版本升级时，必须先在服务器 `.env` 增加一个与 `APP_API_TOKEN` 不同的 `ADMIN_API_TOKEN`，然后重新创建应用容器：
 

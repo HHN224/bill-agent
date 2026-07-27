@@ -14,12 +14,12 @@
 
 ## 前端落地时必须完成
 
-这些不是新的后端功能，应与实际前端构建产物一起完成：
+以下各项已随 `frontend/` 后台前端一起完成（2026-07）：
 
-1. 让 Caddy 托管前端静态资源并支持 SPA 路由回退。
-2. 保持 `/api`、`/health`、`/docs*`、`/redoc` 和 `/openapi.json` 转发到 FastAPI。
-3. 将前端生产构建接入 Docker 镜像或 Compose；在没有前端构建产物前不要提前修改当前可用的 Caddy 配置。
-4. 本地开发通过前端开发服务器代理 `/api`，不要为此给 FastAPI 增加 CORS。
+1. ~~让 Caddy 托管前端静态资源并支持 SPA 路由回退。~~ 已完成：`Dockerfile` 的 `web` 目标把 `frontend/dist` 复制到 `/srv/frontend`，`Caddyfile` 使用 `try_files {path} /index.html`。
+2. ~~保持 `/api`、`/health`、`/docs*`、`/redoc` 和 `/openapi.json` 转发到 FastAPI。~~ 已完成：`Caddyfile` 中 `@api` 匹配器继续 `reverse_proxy` 到 `app:8000`。
+3. ~~将前端生产构建接入 Docker 镜像或 Compose。~~ 已完成：`Dockerfile` 新增 Node 前端构建阶段，Compose 的 `app`/`caddy` 分别构建 `app`/`web` 目标。
+4. ~~本地开发通过前端开发服务器代理 `/api`~~。已完成：Vite dev server 代理 `/api` 到 `127.0.0.1:8000`，FastAPI 未增加 CORS。
 
 ## 仅在触发条件出现后迭代
 
