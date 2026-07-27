@@ -20,7 +20,7 @@ logger = get_application_logger(__name__)
 
 app = FastAPI(
     title="Natural Language Bookkeeping API",
-    version="0.5.0",
+    version="0.6.0",
 )
 
 register_exception_handlers(app)

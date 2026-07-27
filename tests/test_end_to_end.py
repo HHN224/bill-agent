@@ -16,7 +16,8 @@ from app.main import app
 from app.services.transaction_parser import TransactionParser
 
 
-AUTH_HEADERS = {"Authorization": "Bearer test-token"}
+SHORTCUT_HEADERS = {"Authorization": "Bearer test-shortcut-token"}
+ADMIN_HEADERS = {"Authorization": "Bearer test-admin-token"}
 
 
 class FakeCompletionClient:
@@ -78,7 +79,8 @@ def test_shortcut_request_is_parsed_saved_and_summarized(tmp_path) -> None:
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_transaction_parser] = lambda: parser
     app.dependency_overrides[get_settings] = lambda: Settings(
-        app_api_token="test-token",
+        app_api_token="test-shortcut-token",
+        admin_api_token="test-admin-token",
         default_timezone="Asia/Taipei",
     )
 
@@ -86,7 +88,7 @@ def test_shortcut_request_is_parsed_saved_and_summarized(tmp_path) -> None:
         with TestClient(app) as client:
             created = client.post(
                 "/api/transactions/parse-and-create",
-                headers=AUTH_HEADERS,
+                headers=SHORTCUT_HEADERS,
                 json={
                     "text": "中午食堂牛肉饭18块5，微信支付",
                     "timezone": "Asia/Taipei",
@@ -95,11 +97,11 @@ def test_shortcut_request_is_parsed_saved_and_summarized(tmp_path) -> None:
             )
             recent = client.get(
                 "/api/transactions?limit=20",
-                headers=AUTH_HEADERS,
+                headers=ADMIN_HEADERS,
             )
             monthly = client.get(
                 "/api/summaries/monthly?year=2026&month=7",
-                headers=AUTH_HEADERS,
+                headers=ADMIN_HEADERS,
             )
     finally:
         app.dependency_overrides.clear()
@@ -109,8 +111,11 @@ def test_shortcut_request_is_parsed_saved_and_summarized(tmp_path) -> None:
     assert created.json()["success"] is True
     assert created.json()["message"] == "已记录：餐饮 18.50 元，牛肉饭"
     assert recent.status_code == 200
-    assert len(recent.json()) == 1
-    assert recent.json()[0]["raw_text"] == "中午食堂牛肉饭18块5，微信支付"
+    assert recent.json()["total"] == 1
+    assert len(recent.json()["items"]) == 1
+    assert recent.json()["items"][0]["raw_text"] == (
+        "中午食堂牛肉饭18块5，微信支付"
+    )
     assert monthly.status_code == 200
     assert monthly.json()["expense_total"] == 18.5
     assert monthly.json()["transaction_count"] == 1

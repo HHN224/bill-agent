@@ -1,17 +1,19 @@
-# 自然语言记账后端
+# Pocket Ledger API
 
-这是个人自然语言记账系统的 FastAPI 后端。目前已完成阶段 1～5 的 MVP：iPhone 快捷指令可以提交自然语言，后端调用大模型解析、写入 SQLite，并提供交易管理及今日、月度统计 API。
+一个为个人使用设计的自然语言记账后端：iPhone 快捷指令说一句话即可记账，同时为后台管理页面提供不经过大模型的结构化 CRUD、分页查询和收支统计。
 
-统计完全由 SQLite 聚合计算，不会调用大模型。项目使用简单 Bearer Token 鉴权，适合个人使用，不包含用户系统或复杂前端。
+## 功能亮点
 
-## 环境要求
+- 自然语言记账：调用大模型解析金额、分类、时间、商户和备注。
+- 手工记账：后台表单直接写库，不消耗模型额度，响应更快。
+- 交易管理：按日期、分类、类型和关键词筛选，支持分页、详情、修改和删除。
+- 收支统计：提供今日和月度汇总，统计完全由 SQLite 计算。
+- 权限隔离：手机快捷指令和后台管理使用两枚不同的 Bearer Token。
+- 生产可用：FastAPI + SQLAlchemy + Alembic + SQLite，附 Docker Compose、Caddy HTTPS、备份与恢复手册。
 
-- Python 3.11 或更高版本
-- Windows、macOS 或 Linux
+## 快速开始
 
-## 本机安装
-
-Windows PowerShell：
+要求 Python 3.11 或更高版本。
 
 ```powershell
 python -m venv .venv
@@ -20,7 +22,7 @@ python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-macOS / Linux：
+macOS / Linux 对应使用：
 
 ```bash
 python3 -m venv .venv
@@ -29,246 +31,181 @@ python -m pip install -r requirements.txt
 cp .env.example .env
 ```
 
-打开 `.env`，把 `APP_API_TOKEN` 改成一个足够长的随机值，并填写要使用的大模型配置：
+编辑 `.env`，至少设置两枚不同的高强度随机 Token，并填写大模型配置：
 
-| 变量 | 当前用途 |
-| --- | --- |
-| `APP_API_TOKEN` | 所有交易与统计 API 使用的 Bearer Token |
-| `DEFAULT_TIMEZONE` | 默认时区 |
-| `DATABASE_URL` | SQLAlchemy 数据库地址 |
-| `LLM_API_KEY` | 大模型 API 密钥 |
-| `LLM_BASE_URL` | 兼容 Chat Completions 的 API 基础地址；留空时使用 OpenAI 默认地址 |
-| `LLM_MODEL` | 厂商提供的模型名称 |
-| `LLM_TIMEOUT_SECONDS` | 单次模型请求超时秒数，默认 8 秒 |
-| `DOMAIN` | Docker 部署使用的公网域名，本机直接运行 Python 时不使用 |
-| `DATA_HOST_DIR` | Docker 部署时绑定挂载 SQLite 数据的 VPS 目录 |
-| `BACKUP_HOST_DIR` | Docker 部署时保存 SQLite 本机备份的 VPS 绝对路径 |
+```dotenv
+APP_API_TOKEN=手机快捷指令专用随机值
+ADMIN_API_TOKEN=后台管理专用的另一个随机值
+DEFAULT_TIMEZONE=Asia/Hong_Kong
+DATABASE_URL=sqlite:///./data/bookkeeping.db
 
-以兼容 OpenAI Chat Completions 的 DeepSeek 服务为例：
-
-```env
-LLM_API_KEY=替换为你的密钥
-LLM_BASE_URL=https://api.deepseek.com
-LLM_MODEL=替换为账户可用的模型名称
+LLM_API_KEY=你的模型密钥
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_MODEL=实际使用的模型名称
 LLM_TIMEOUT_SECONDS=8
 ```
 
-`.env` 已被 Git 忽略。不要把真实的 API Key 或 Token 写进代码、README、截图或提交记录。
-
-## 启动
-
-激活虚拟环境后运行：
+初始化数据库并启动：
 
 ```powershell
 python -m alembic upgrade head
 python run.py
 ```
 
-也可以直接使用 Uvicorn：
-
-```powershell
-python -m alembic upgrade head
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-首次执行迁移会创建 `data/bookkeeping.db`、`transactions` 表和 Alembic 版本记录；后续执行只应用尚未运行的新迁移。
-
-可访问：
+打开：
 
 - 健康检查：<http://127.0.0.1:8000/health>
-- Swagger 文档：<http://127.0.0.1:8000/docs>
+- Swagger API 文档：<http://127.0.0.1:8000/docs>
 
-`127.0.0.1` 只能由本机访问。iPhone 在同一局域网调用时，需要把地址替换为电脑的局域网 IP，例如 `http://192.168.1.20:8000`，并允许系统防火墙放行 TCP 8000 端口。
+## 配置
 
-健康检查不需要 Token：
+| 变量 | 用途 |
+| --- | --- |
+| `APP_API_TOKEN` | 仅用于 `parse-and-create`，配置在 iPhone 快捷指令中 |
+| `ADMIN_API_TOKEN` | 用于后台手工记账、查询、修改、删除和统计 |
+| `DEFAULT_TIMEZONE` | 日期筛选与统计的默认 IANA 时区 |
+| `DATABASE_URL` | SQLAlchemy 数据库地址 |
+| `LLM_API_KEY` | 大模型 API 密钥 |
+| `LLM_BASE_URL` | 兼容 Chat Completions 的 API 基础地址 |
+| `LLM_MODEL` | 模型名称 |
+| `LLM_TIMEOUT_SECONDS` | 单次模型调用超时秒数 |
+| `DOMAIN` | Docker + Caddy 部署使用的域名 |
+| `DATA_HOST_DIR` | VPS 上的 SQLite 数据目录 |
+| `BACKUP_HOST_DIR` | VPS 上的一致性备份目录 |
 
-```powershell
-Invoke-RestMethod http://127.0.0.1:8000/health
-```
+`.env` 已被 Git 忽略。不要把真实 Token 或模型密钥写进源码、README、截图或提交记录。
 
-预期结果：
+## 鉴权边界
 
-```json
-{"status": "ok"}
-```
-
-## 交易 API
-
-除 `/health` 和文档外，交易 API 都需要请求头：
+所有受保护接口使用：
 
 ```text
-Authorization: Bearer 你的APP_API_TOKEN
+Authorization: Bearer 对应的Token
 ```
 
-使用 PowerShell 解析并记录一笔账：
+| 调用方 | Token | 允许访问 |
+| --- | --- | --- |
+| iPhone 快捷指令 | `APP_API_TOKEN` | 仅自然语言解析并创建交易 |
+| 后台管理系统 | `ADMIN_API_TOKEN` | 手工创建、列表、详情、修改、删除、统计 |
 
-```powershell
-$headers = @{ Authorization = "Bearer 你的APP_API_TOKEN" }
-$body = @{
-    text = "中午食堂牛肉饭18块5，微信支付"
-    timezone = "Asia/Taipei"
-} | ConvertTo-Json
+两枚 Token 不可互换。手机 Token 泄露时，攻击者不能读取、修改或删除已有交易；后台 Token 也不能调用大模型入口。若任一 Token 未配置，对应接口会保持拒绝访问。
 
-Invoke-RestMethod `
-    -Method Post `
-    -Uri http://127.0.0.1:8000/api/transactions/parse-and-create `
-    -Headers $headers `
-    -ContentType "application/json" `
-    -Body $body
-```
+## API 速查
 
-查询最近账单：
+### 自然语言记账
 
-```powershell
-Invoke-RestMethod `
-    -Uri "http://127.0.0.1:8000/api/transactions?limit=20" `
-    -Headers $headers
-```
-
-当前提供：
-
-- `POST /api/transactions/parse-and-create`
-- `GET /api/transactions`
-- `GET /api/transactions/{id}`
-- `PATCH /api/transactions/{id}`
-- `DELETE /api/transactions/{id}`
-
-列表接口支持 `limit`、`offset`、`start_date`、`end_date`、`category`、`type` 和 `keyword`。
-
-## 统计 API
-
-查询默认时区中的今日统计：
-
-```powershell
-Invoke-RestMethod `
-    -Uri http://127.0.0.1:8000/api/summaries/daily `
-    -Headers $headers
-```
-
-查询指定月份：
-
-```powershell
-Invoke-RestMethod `
-    -Uri "http://127.0.0.1:8000/api/summaries/monthly?year=2026&month=7" `
-    -Headers $headers
-```
-
-当前提供：
-
-- `GET /api/summaries/daily`
-- `GET /api/summaries/monthly?year=YYYY&month=M`
-
-统计口径：
-
-- `expense_total`：区间内全部支出。
-- `income_total`：区间内全部收入。
-- `net_amount`：收入减支出，仅月度响应提供。
-- `transaction_count`：区间内收入与支出的总笔数。
-- `categories`：按一级分类汇总的支出，按金额倒序排列。
-- `daily_totals`：按默认时区日期汇总的每日支出，仅包含有支出的日期。
-
-日期边界按照 `DEFAULT_TIMEZONE` 计算，数据库中仍使用 UTC 时间查询。
-
-## curl 验收命令
-
-以下示例适用于 Windows PowerShell；macOS 或 Linux 把 `curl.exe` 改为 `curl`。请将 `YOUR_TOKEN` 和账单 ID 替换为实际值。
-
-健康检查：
-
-```powershell
-curl.exe http://127.0.0.1:8000/health
-```
-
-解析并创建账单：
-
-```powershell
-curl.exe -X POST "http://127.0.0.1:8000/api/transactions/parse-and-create" `
-  -H "Authorization: Bearer YOUR_TOKEN" `
-  -H "Content-Type: application/json; charset=utf-8" `
-  --data-raw '{"text":"中午食堂牛肉饭18块5，微信支付","timezone":"Asia/Taipei"}'
-```
-
-成功响应中的关键字段如下：
+`POST /api/transactions/parse-and-create`，使用 `APP_API_TOKEN`：
 
 ```json
 {
-  "success": true,
-  "requires_confirmation": false,
-  "message": "已记录：餐饮 18.50 元，牛肉饭",
-  "transaction": {
-    "id": 1,
-    "amount": 18.5,
-    "category": "餐饮",
-    "note": "牛肉饭"
-  }
+  "text": "中午食堂牛肉饭18块5，微信支付",
+  "timezone": "Asia/Hong_Kong"
 }
 ```
 
-查询、修改和删除账单：
+解析到有效金额时写入数据库；金额缺失时返回 `requires_confirmation: true`，不会保存交易。
 
-```powershell
-curl.exe "http://127.0.0.1:8000/api/transactions?limit=20" `
-  -H "Authorization: Bearer YOUR_TOKEN"
+### 手工记账
 
-curl.exe "http://127.0.0.1:8000/api/transactions/1" `
-  -H "Authorization: Bearer YOUR_TOKEN"
+`POST /api/transactions/manual`，使用 `ADMIN_API_TOKEN`。这个接口不调用大模型：
 
-curl.exe -X PATCH "http://127.0.0.1:8000/api/transactions/1" `
-  -H "Authorization: Bearer YOUR_TOKEN" `
-  -H "Content-Type: application/json; charset=utf-8" `
-  --data-raw '{"amount":20.5,"note":"修正后的午饭"}'
-
-curl.exe -X DELETE "http://127.0.0.1:8000/api/transactions/1" `
-  -H "Authorization: Bearer YOUR_TOKEN"
+```json
+{
+  "type": "expense",
+  "amount": 18.5,
+  "currency": "CNY",
+  "category": "餐饮",
+  "subcategory": "午餐",
+  "merchant": "学校食堂",
+  "payment_method": "微信",
+  "occurred_at": "2026-07-27T12:20:00+08:00",
+  "note": "牛肉饭",
+  "tags": ["食堂", "午餐"]
+}
 ```
 
-查询今日和月度统计：
+必填字段为 `amount`、`category` 和带时区偏移的 `occurred_at`。`type` 默认 `expense`，`currency` 默认 `CNY`，`tags` 默认空数组。成功返回 `201 Created` 和完整交易；手工创建的 `raw_text` 为 `""`，`confidence` 为 `null`。
 
-```powershell
-curl.exe "http://127.0.0.1:8000/api/summaries/daily" `
-  -H "Authorization: Bearer YOUR_TOKEN"
+一级分类固定为：`餐饮`、`交通`、`购物`、`娱乐`、`学习`、`生活缴费`、`医疗`、`社交`、`住房`、`收入`、`其他`。
 
-curl.exe "http://127.0.0.1:8000/api/summaries/monthly?year=2026&month=7" `
-  -H "Authorization: Bearer YOUR_TOKEN"
+### 分页查询
+
+`GET /api/transactions?limit=20&offset=0`，使用 `ADMIN_API_TOKEN`：
+
+```json
+{
+  "items": [
+    {
+      "id": 123,
+      "type": "expense",
+      "amount": 18.5,
+      "category": "餐饮",
+      "occurred_at": "2026-07-27T04:20:00Z"
+    }
+  ],
+  "total": 57
+}
 ```
 
-## 配置 iPhone 快捷指令
+`total` 是当前筛选条件命中的总条数，不受 `limit` 和 `offset` 影响。后台可用 `Math.ceil(total / limit)` 计算总页数。
 
-开始前确认 iPhone 能访问后端地址。局域网使用时，电脑和 iPhone 应连接同一个网络；从公网访问时，应使用带 HTTPS 的可信反向代理或隧道，不建议直接暴露开发服务器。
+支持的查询参数：
 
-1. 打开“快捷指令”，新建快捷指令并命名为“快速记账”。
-2. 添加“询问输入”操作。
-3. 将提示文字设为“这笔钱花在哪里了？”，输入类型选择“文本”。
-4. 添加“字典”操作。
-5. 在字典中添加文本键 `text`，值选择前一步的“询问输入”结果。
-6. 再添加文本键 `timezone`，值填写 `Asia/Taipei`；如果 `.env` 使用其他时区，这里填写相同的 IANA 时区名称。
-7. 添加“获取 URL 内容”操作。
-8. URL 填写 `http://电脑局域网IP:8000/api/transactions/parse-and-create`；部署到公网后改成对应的 HTTPS 地址。
-9. 将方法设为 `POST`，请求体设为 `JSON`。
-10. 把请求体的 `text` 和 `timezone` 分别绑定到前面的字典值；部分 iOS 版本可直接把整个字典作为 JSON 请求体。
-11. 在“标头”中添加 `Authorization`，值填写 `Bearer 你的APP_API_TOKEN`。`Bearer` 后必须有一个空格。
-12. 在请求动作之后添加“获取字典值”，键填写 `message`。
-13. 添加“显示通知”或“显示结果”，内容选择上一步取得的 `message`。
-14. 保存快捷指令并测试：输入“午饭食堂18块”，手机应显示类似“已记录：餐饮 18.00 元，午饭”。
+| 参数 | 说明 |
+| --- | --- |
+| `limit` | 每页条数，1～100，默认 20 |
+| `offset` | 跳过条数，默认 0 |
+| `start_date` / `end_date` | 按默认时区筛选，格式 `YYYY-MM-DD`，包含结束日 |
+| `category` | 一级分类 |
+| `type` | `expense` 或 `income` |
+| `keyword` | 匹配原始文本、备注或商户 |
 
-如果模型没有识别到金额，接口会返回 `requires_confirmation: true`，快捷指令仍会展示 `message`，提示补充金额后重新输入。
+### 其他后台接口
 
-## 运行测试
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| `GET` | `/api/transactions/{id}` | 查询单笔交易 |
+| `PATCH` | `/api/transactions/{id}` | 修改类型、金额、分类、子分类、时间、商户、备注、支付方式或标签 |
+| `DELETE` | `/api/transactions/{id}` | 永久删除单笔交易 |
+| `GET` | `/api/summaries/daily` | 默认时区的今日收支统计 |
+| `GET` | `/api/summaries/monthly?year=2026&month=7` | 月度收支、净额、分类和每日支出 |
+
+完整请求与响应契约见 [后台 API 契约](docs/admin-api.md)。
+
+## iPhone 快捷指令
+
+快捷指令只需要调用自然语言入口：
+
+1. “询问输入”获取记账文本。
+2. 创建字典：`text` 为输入结果，`timezone` 为服务使用的 IANA 时区。
+3. “获取 URL 内容”：方法 `POST`，URL 为 `https://你的域名/api/transactions/parse-and-create`。
+4. 请求体选择 JSON；请求头添加 `Authorization: Bearer 你的APP_API_TOKEN`。
+5. 显示响应中的 `message`。
+
+不要把 `ADMIN_API_TOKEN` 放进快捷指令。
+
+## 测试
 
 ```powershell
-python -m pytest -q
+python -m pytest
+python -m alembic check
 ```
 
-测试覆盖阶段 1～5 的配置、数据库、鉴权、模型客户端、解析器、交易管理、统计、统一错误响应，以及“请求 → 解析 → 入库 → 查询 → 汇总”的完整链路。自动化测试中的模型调用全部使用 Mock，不会消耗 API。
+测试覆盖解析、两枚 Token 的权限隔离、手工记账不调用模型、筛选分页总数、CRUD、统计、迁移、容器配置和完整调用链。
 
-若只运行完整链路测试：
+## 部署与升级
 
-```powershell
-python -m pytest -q tests/test_end_to_end.py
+生产环境使用单 VPS 的 Docker Compose：Caddy 负责 HTTPS，FastAPI 仅暴露在 Compose 内网，SQLite 绑定挂载到宿主机。
+
+完整步骤见 [部署、更新、Token 轮换、备份与恢复手册](docs/deployment.md)。从早期单 Token 版本升级时，必须先在服务器 `.env` 增加一个与 `APP_API_TOKEN` 不同的 `ADMIN_API_TOKEN`，然后重新创建应用容器：
+
+```bash
+docker compose up -d --build --force-recreate app
 ```
 
-## 常见错误排查
+只执行 `docker compose restart app` 不会重新读取 `.env`。不要执行 `docker compose down -v`，也不要删除 `DATA_HOST_DIR`。
 
+## 后台开发交接
 | 现象 | 原因与处理 |
 | --- | --- |
 | `401 UNAUTHORIZED` | 检查请求头是否为 `Authorization: Bearer APP_API_TOKEN的值`，注意 `Bearer` 后的空格，并确认服务已在修改 `.env` 后重启。 |
@@ -366,11 +303,10 @@ python -m pytest -q tests/test_end_to_end.py
 
 本地常用命令：
 
-```powershell
-python -m alembic current
-python -m alembic upgrade head
-python -m alembic revision --autogenerate -m "描述本次结构变更"
-python -m alembic check
-```
+- [可直接交给前端 AI 的后台构建 Prompt](docs/admin-frontend-prompt.md)
+- [后台 API 契约](docs/admin-api.md)
+- [后台 MVP 边界与后续迭代候选](docs/admin-backlog.md)
+- [领域术语](CONTEXT.md)
+- [鉴权拆分架构决策](docs/adr/0002-separate-shortcut-and-admin-tokens.md)
 
-修改 ORM 模型后，应生成并人工检查迁移文件，再运行测试。不要用 `Base.metadata.create_all()` 代替生产迁移。初始迁移可以接管本项目旧版本创建的兼容 `transactions` 表；如果现有字段不兼容，迁移会拒绝启动，避免静默覆盖数据。
+本项目当前是单用户个人系统。`ADMIN_API_TOKEN` 是独立静态凭证，不等同于完整的多用户账号系统；前端应同源部署，且不得把 Token 写入源码、URL 或 `localStorage`。如未来需要长期登录、多用户或更强的浏览器安全，应升级为服务端会话与 `HttpOnly` Cookie。

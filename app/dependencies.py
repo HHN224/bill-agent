@@ -14,17 +14,15 @@ from app.services.transaction_parser import TransactionParser
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def verify_api_token(
-    credentials: Annotated[
-        HTTPAuthorizationCredentials | None, Depends(bearer_scheme)
-    ],
-    settings: Annotated[Settings, Depends(get_settings)],
+def _verify_bearer_token(
+    credentials: HTTPAuthorizationCredentials | None,
+    expected_token: str,
 ) -> None:
-    """要求 Bearer Token 与 APP_API_TOKEN 一致。"""
+    """以常量时间比较请求中的 Bearer Token。"""
     supplied_token = credentials.credentials if credentials else ""
-    token_is_valid = bool(settings.app_api_token) and secrets.compare_digest(
+    token_is_valid = bool(expected_token) and secrets.compare_digest(
         supplied_token,
-        settings.app_api_token,
+        expected_token,
     )
     if not token_is_valid:
         raise HTTPException(
@@ -32,6 +30,27 @@ def verify_api_token(
             detail="Invalid or missing API token.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def verify_shortcut_token(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(bearer_scheme)
+    ],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> None:
+    """要求 Bearer Token 与手机快捷指令的 APP_API_TOKEN 一致。"""
+    _verify_bearer_token(credentials, settings.app_api_token)
+
+
+def verify_admin_token(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(bearer_scheme)
+    ],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> None:
+    """要求 Bearer Token 与后台管理专用 ADMIN_API_TOKEN 一致。"""
+    _verify_bearer_token(credentials, settings.admin_api_token)
+
 
 
 def get_transaction_parser(

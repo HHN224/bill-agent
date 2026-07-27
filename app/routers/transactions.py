@@ -5,20 +5,26 @@ from typing import Annotated
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.database import get_db
-from app.dependencies import get_transaction_parser, verify_api_token
+from app.dependencies import (
+    get_transaction_parser,
+    verify_admin_token,
+    verify_shortcut_token,
+)
 from app.errors import APIError
 from app.logging_config import get_application_logger
 from app.models import Transaction
 from app.schemas import (
     DeleteTransactionResponse,
+    ManualTransactionCreate,
     ParseAndCreateRequest,
     ParseAndCreateResponse,
+    TransactionListResponse,
     TransactionResponse,
     TransactionUpdate,
 )
@@ -43,7 +49,6 @@ logger = get_application_logger(__name__)
 router = APIRouter(
     prefix="/api/transactions",
     tags=["transactions"],
-    dependencies=[Depends(verify_api_token)],
 )
 
 
@@ -97,6 +102,7 @@ def _timezone_from_settings(settings: Settings) -> ZoneInfo:
     "/parse-and-create",
     response_model=ParseAndCreateResponse,
     response_model_exclude_none=True,
+    dependencies=[Depends(verify_shortcut_token)],
 )
 def parse_and_create_transaction(
     request: ParseAndCreateRequest,
@@ -187,7 +193,36 @@ def parse_and_create_transaction(
     )
 
 
-@router.get("", response_model=list[TransactionResponse])
+@router.post(
+    "/manual",
+    response_model=TransactionResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(verify_admin_token)],
+)
+def create_manual_transaction(
+    request: ManualTransactionCreate,
+    session: Annotated[Session, Depends(get_db)],
+) -> TransactionResponse:
+    """直接保存后台表单提供的结构化交易，不调用大模型。"""
+    transaction = Transaction(
+        **request.model_dump(),
+        raw_text="",
+        confidence=None,
+    )
+    session.add(transaction)
+    try:
+        session.commit()
+        session.refresh(transaction)
+    except SQLAlchemyError as exc:
+        raise _database_error(session, exc) from exc
+    return _transaction_response(transaction)
+
+
+@router.get(
+    "",
+    response_model=TransactionListResponse,
+    dependencies=[Depends(verify_admin_token)],
+)
 def list_transactions(
     session: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -201,7 +236,7 @@ def list_transactions(
         Query(alias="type"),
     ] = None,
     keyword: Annotated[str | None, Query(min_length=1)] = None,
-) -> list[TransactionResponse]:
+) -> TransactionListResponse:
     """按条件查询账单，并按发生时间倒序返回。"""
     if start_date and end_date and start_date > end_date:
         raise APIError(
@@ -210,7 +245,7 @@ def list_transactions(
             message="start_date cannot be later than end_date.",
         )
 
-    statement = select(Transaction)
+    filters = []
     configured_timezone = _timezone_from_settings(settings)
     if start_date is not None:
         start_time = datetime.combine(
@@ -218,21 +253,21 @@ def list_transactions(
             time.min,
             tzinfo=configured_timezone,
         )
-        statement = statement.where(Transaction.occurred_at >= start_time)
+        filters.append(Transaction.occurred_at >= start_time)
     if end_date is not None:
         end_time = datetime.combine(
             end_date + timedelta(days=1),
             time.min,
             tzinfo=configured_timezone,
         )
-        statement = statement.where(Transaction.occurred_at < end_time)
+        filters.append(Transaction.occurred_at < end_time)
     if category is not None:
-        statement = statement.where(Transaction.category == category)
+        filters.append(Transaction.category == category)
     if transaction_type is not None:
-        statement = statement.where(Transaction.type == transaction_type)
+        filters.append(Transaction.type == transaction_type)
     if keyword is not None:
         search_term = f"%{keyword.strip()}%"
-        statement = statement.where(
+        filters.append(
             or_(
                 Transaction.raw_text.ilike(search_term),
                 Transaction.note.ilike(search_term),
@@ -241,18 +276,33 @@ def list_transactions(
         )
 
     statement = (
-        statement.order_by(Transaction.occurred_at.desc())
+        select(Transaction)
+        .where(*filters)
+        .order_by(Transaction.occurred_at.desc())
         .offset(offset)
         .limit(limit)
     )
+    count_statement = (
+        select(func.count())
+        .select_from(Transaction)
+        .where(*filters)
+    )
     try:
         transactions = session.scalars(statement).all()
+        total = session.scalar(count_statement) or 0
     except SQLAlchemyError as exc:
         raise _database_error(session, exc) from exc
-    return [_transaction_response(item) for item in transactions]
+    return TransactionListResponse(
+        items=[_transaction_response(item) for item in transactions],
+        total=total,
+    )
 
 
-@router.get("/{transaction_id}", response_model=TransactionResponse)
+@router.get(
+    "/{transaction_id}",
+    response_model=TransactionResponse,
+    dependencies=[Depends(verify_admin_token)],
+)
 def get_transaction(
     transaction_id: int,
     session: Annotated[Session, Depends(get_db)],
@@ -261,7 +311,11 @@ def get_transaction(
     return _transaction_response(_get_transaction(session, transaction_id))
 
 
-@router.patch("/{transaction_id}", response_model=TransactionResponse)
+@router.patch(
+    "/{transaction_id}",
+    response_model=TransactionResponse,
+    dependencies=[Depends(verify_admin_token)],
+)
 def update_transaction(
     transaction_id: int,
     update: TransactionUpdate,
@@ -284,6 +338,7 @@ def update_transaction(
     "/{transaction_id}",
     response_model=DeleteTransactionResponse,
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(verify_admin_token)],
 )
 def delete_transaction(
     transaction_id: int,

@@ -1,5 +1,6 @@
 ---
-status: accepted
+status: superseded
+superseded-by: 0002-separate-shortcut-and-admin-tokens
 ---
 
 # v1 部署：单 VPS 单 Compose 栈，单静态 Token 鉴权
