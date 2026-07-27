@@ -359,6 +359,7 @@ python -m pytest -q tests/test_end_to_end.py
 
 不要执行 `docker compose down -v`，该命令会删除 Caddy 的证书与运行状态卷；不要删除 `${DATA_HOST_DIR}`，其中保存 SQLite 主库。
 
+- 偷偷在这里放置一个传送标记
 ## 数据库迁移（Alembic）
 
 数据库结构由 Alembic 管理。Docker 容器启动时会先执行 `python -m alembic upgrade head`，迁移成功后才启动 API；迁移失败时容器会退出，不会让旧结构数据库继续提供服务。
