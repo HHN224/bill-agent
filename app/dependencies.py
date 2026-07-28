@@ -52,6 +52,29 @@ def verify_admin_token(
     _verify_bearer_token(credentials, settings.admin_api_token)
 
 
+def verify_app_or_admin_token(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(bearer_scheme)
+    ],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> None:
+    """允许 APP_API_TOKEN 或 ADMIN_API_TOKEN 访问共享接口。"""
+    supplied_token = credentials.credentials if credentials else ""
+    token_is_valid = any(
+        bool(expected_token)
+        and secrets.compare_digest(supplied_token, expected_token)
+        for expected_token in (
+            settings.app_api_token,
+            settings.admin_api_token,
+        )
+    )
+    if not token_is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing API token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
 
 def get_transaction_parser(
     settings: Annotated[Settings, Depends(get_settings)],

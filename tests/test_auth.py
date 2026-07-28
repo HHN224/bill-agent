@@ -2,7 +2,11 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 from app.config import Settings, get_settings
-from app.dependencies import verify_admin_token, verify_shortcut_token
+from app.dependencies import (
+    verify_admin_token,
+    verify_app_or_admin_token,
+    verify_shortcut_token,
+)
 
 
 def create_test_app() -> FastAPI:
@@ -24,6 +28,13 @@ def create_test_app() -> FastAPI:
         dependencies=[Depends(verify_admin_token)],
     )
     def admin() -> dict[str, bool]:
+        return {"success": True}
+
+    @test_app.get(
+        "/shared",
+        dependencies=[Depends(verify_app_or_admin_token)],
+    )
+    def shared() -> dict[str, bool]:
         return {"success": True}
 
     return test_app
@@ -63,6 +74,21 @@ def test_invalid_token_returns_401() -> None:
 
     assert response.status_code == 401
     assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_shared_scope_allows_app_and_admin_tokens() -> None:
+    with TestClient(create_test_app()) as client:
+        app_response = client.get(
+            "/shared",
+            headers={"Authorization": "Bearer shortcut-token"},
+        )
+        admin_response = client.get(
+            "/shared",
+            headers={"Authorization": "Bearer admin-token"},
+        )
+
+    assert app_response.status_code == 200
+    assert admin_response.status_code == 200
 
 
 def test_missing_token_returns_401() -> None:

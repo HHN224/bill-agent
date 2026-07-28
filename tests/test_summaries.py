@@ -19,7 +19,8 @@ from app.main import app
 from app.models import Transaction
 
 
-AUTH_HEADERS = {"Authorization": "Bearer test-token"}
+ADMIN_AUTH_HEADERS = {"Authorization": "Bearer test-admin-token"}
+APP_AUTH_HEADERS = {"Authorization": "Bearer test-app-token"}
 TEST_TIMEZONE = ZoneInfo("Asia/Taipei")
 
 
@@ -48,7 +49,8 @@ def summary_client(
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_settings] = lambda: Settings(
-        admin_api_token="test-token",
+        app_api_token="test-app-token",
+        admin_api_token="test-admin-token",
         default_timezone="Asia/Taipei",
     )
 
@@ -135,7 +137,7 @@ def test_daily_summary_uses_current_local_date_and_database_totals(
 
     response = client.get(
         "/api/summaries/daily",
-        headers=AUTH_HEADERS,
+        headers=ADMIN_AUTH_HEADERS,
     )
 
     assert response.status_code == 200
@@ -209,7 +211,7 @@ def test_monthly_summary_calculates_net_categories_and_daily_totals(
 
     response = client.get(
         "/api/summaries/monthly",
-        headers=AUTH_HEADERS,
+        headers=ADMIN_AUTH_HEADERS,
         params={"year": 2026, "month": 7},
     )
 
@@ -239,7 +241,7 @@ def test_empty_month_returns_zero_totals(
 
     response = client.get(
         "/api/summaries/monthly",
-        headers=AUTH_HEADERS,
+        headers=ADMIN_AUTH_HEADERS,
         params={"year": 2025, "month": 1},
     )
 
@@ -250,6 +252,30 @@ def test_empty_month_returns_zero_totals(
     assert response.json()["transaction_count"] == 0
     assert response.json()["categories"] == []
     assert response.json()["daily_totals"] == []
+
+
+def test_daily_summary_allows_app_token(summary_client) -> None:
+    client, _ = summary_client
+
+    response = client.get(
+        "/api/summaries/daily",
+        headers=APP_AUTH_HEADERS,
+    )
+
+    assert response.status_code == 200
+
+
+def test_monthly_summary_rejects_app_token(summary_client) -> None:
+    client, _ = summary_client
+
+    response = client.get(
+        "/api/summaries/monthly",
+        headers=APP_AUTH_HEADERS,
+        params={"year": 2026, "month": 7},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["error_code"] == "UNAUTHORIZED"
 
 
 def test_summary_endpoints_require_token(summary_client) -> None:
@@ -271,7 +297,7 @@ def test_invalid_month_returns_unified_validation_error(
 
     response = client.get(
         "/api/summaries/monthly",
-        headers=AUTH_HEADERS,
+        headers=ADMIN_AUTH_HEADERS,
         params={"year": 2026, "month": 13},
     )
 
@@ -296,7 +322,7 @@ def test_summary_database_error_returns_clear_error_and_safe_log(
     try:
         response = client.get(
             "/api/summaries/monthly",
-            headers=AUTH_HEADERS,
+            headers=ADMIN_AUTH_HEADERS,
             params={"year": 2026, "month": 7},
         )
     finally:
@@ -317,13 +343,14 @@ def test_invalid_summary_timezone_returns_clear_error(
 ) -> None:
     client, _ = summary_client
     app.dependency_overrides[get_settings] = lambda: Settings(
-        admin_api_token="test-token",
+        app_api_token="test-app-token",
+        admin_api_token="test-admin-token",
         default_timezone="Invalid/Timezone",
     )
 
     response = client.get(
         "/api/summaries/daily",
-        headers=AUTH_HEADERS,
+        headers=ADMIN_AUTH_HEADERS,
     )
 
     assert response.status_code == 500

@@ -92,7 +92,7 @@
 
 `GET /api/summaries/daily`
 
-返回日期、支出总额、收入总额、交易笔数和支出分类汇总。
+返回日期、支出总额、收入总额、交易笔数和支出分类汇总。该接口同时接受 `APP_API_TOKEN` 和 `ADMIN_API_TOKEN`。
 
 ### 月度统计
 

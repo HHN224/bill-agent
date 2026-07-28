@@ -168,7 +168,7 @@ Authorization: Bearer 对应的Token
 | `GET` | `/api/transactions/{id}` | 查询单笔交易 |
 | `PATCH` | `/api/transactions/{id}` | 修改类型、金额、分类、子分类、时间、商户、备注、支付方式或标签 |
 | `DELETE` | `/api/transactions/{id}` | 永久删除单笔交易 |
-| `GET` | `/api/summaries/daily` | 默认时区的今日收支统计 |
+| `GET` | `/api/summaries/daily` | 默认时区的今日收支统计；支持 APP 或 ADMIN Token |
 | `GET` | `/api/summaries/monthly?year=2026&month=7` | 月度收支、净额、分类和每日支出 |
 
 完整请求与响应契约见 [后台 API 契约](docs/admin-api.md)。
