@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.database import get_db
-from app.dependencies import verify_admin_token
+from app.dependencies import verify_admin_token, verify_app_or_admin_token
 from app.errors import APIError
 from app.logging_config import get_application_logger
 from app.schemas import DailySummaryResponse, MonthlySummaryResponse
@@ -25,7 +25,6 @@ logger = get_application_logger(__name__)
 router = APIRouter(
     prefix="/api/summaries",
     tags=["summaries"],
-    dependencies=[Depends(verify_admin_token)],
 )
 
 
@@ -48,7 +47,11 @@ def _summary_error(exc: Exception) -> APIError:
     )
 
 
-@router.get("/daily", response_model=DailySummaryResponse)
+@router.get(
+    "/daily",
+    response_model=DailySummaryResponse,
+    dependencies=[Depends(verify_app_or_admin_token)],
+)
 def daily_summary(
     session: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -64,7 +67,11 @@ def daily_summary(
         raise _summary_error(exc) from exc
 
 
-@router.get("/monthly", response_model=MonthlySummaryResponse)
+@router.get(
+    "/monthly",
+    response_model=MonthlySummaryResponse,
+    dependencies=[Depends(verify_admin_token)],
+)
 def monthly_summary(
     session: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
