@@ -354,3 +354,5 @@ docker compose up -d --build --force-recreate app
 - [鉴权拆分架构决策](docs/adr/0002-separate-shortcut-and-admin-tokens.md)
 
 本项目当前是单用户个人系统。`ADMIN_API_TOKEN` 是独立静态凭证，不等同于完整的多用户账号系统；前端应同源部署，且不得把 Token 写入源码、URL 或 `localStorage`。如未来需要长期登录、多用户或更强的浏览器安全，应升级为服务端会话与 `HttpOnly` Cookie。
+
+#111
