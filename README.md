@@ -281,11 +281,3 @@ Pocket Ledger 当前是单用户系统，不是完整的多用户账号平台：
 <a href="https://github.com/HHN224/bill-agent/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=HHN224/bill-agent" alt="Contributors" />
 </a>
-
----
-
-<div align="center">
-
-[![Star History Chart](https://api.star-history.com/svg?repos=HHN224/bill-agent&type=Date)](https://star-history.com/#HHN224/bill-agent&Date)
-
-</div>
